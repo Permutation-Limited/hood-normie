@@ -132,6 +132,19 @@ The rebalancer calls only `get_accounts`, `get_portfolio`,
 `get_equity_positions`, and `get_equity_quotes`. Robinhood controls OAuth token
 issuance and displays the permissions for you to approve in the browser.
 
+### Verbose MCP diagnostics
+
+To inspect every MCP JSON-RPC request and complete JSON response:
+
+```sh
+bazel run //:rebalance -- --live --verbose
+```
+
+Verbose output goes to stderr, so `--json` stdout remains machine-readable. The
+program does not print the OAuth `Authorization` header or token. Robinhood's
+responses can contain sensitive account numbers, balances, positions, and other
+brokerage data, so review verbose output before saving or sharing it.
+
 ## Create or update `snapshot.json`
 
 First authenticate as described above and make sure `config.json` maps every held

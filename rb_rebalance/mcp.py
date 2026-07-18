@@ -1,6 +1,7 @@
 """Minimal Streamable HTTP client for Robinhood's official MCP server."""
 
 import json
+import sys
 import urllib.error
 import urllib.request
 import uuid
@@ -12,10 +13,12 @@ class McpError(RuntimeError):
 
 
 class RobinhoodMcpClient:
-    def __init__(self, endpoint: str, bearer_token: str, timeout: float = 30):
+    def __init__(self, endpoint: str, bearer_token: str, timeout: float = 30,
+                 verbose: bool = False):
         self.endpoint = endpoint
         self.bearer_token = bearer_token
         self.timeout = timeout
+        self.verbose = verbose
         self.session_id: str | None = None
         self._request_id = 0
 
@@ -57,6 +60,9 @@ class RobinhoodMcpClient:
         self._post({"jsonrpc": "2.0", "method": method, "params": params}, notification=True)
 
     def _post(self, payload: Mapping[str, Any], notification: bool = False) -> Mapping[str, Any]:
+        if self.verbose:
+            print(f"\n>>> MCP POST {self.endpoint}", file=sys.stderr)
+            print(json.dumps(payload, indent=2, default=str), file=sys.stderr)
         headers = {
             "Authorization": f"Bearer {self.bearer_token}",
             "Content-Type": "application/json",
@@ -78,8 +84,14 @@ class RobinhoodMcpClient:
                 if response.headers.get_content_type() == "text/event-stream":
                     data_lines = [line[6:] for line in body.splitlines() if line.startswith("data: ")]
                     body = data_lines[-1]
-                return json.loads(body) if body else {}
+                parsed = json.loads(body) if body else {}
+                if self.verbose:
+                    print(f"<<< MCP HTTP {response.status}", file=sys.stderr)
+                    print(json.dumps(parsed, indent=2, default=str), file=sys.stderr)
+                return parsed
         except urllib.error.HTTPError as error:
             detail = error.read().decode(errors="replace")
+            if self.verbose:
+                print(f"<<< MCP HTTP {error.code}", file=sys.stderr)
+                print(detail, file=sys.stderr)
             raise McpError(f"MCP HTTP {error.code}: {detail}") from error
-

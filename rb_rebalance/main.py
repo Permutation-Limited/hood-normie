@@ -37,6 +37,8 @@ def main() -> int:
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
                         help="OAuth token file created by //:authenticate")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    parser.add_argument("--verbose", action="store_true",
+                        help="print MCP JSON-RPC requests and responses to stderr")
     args = parser.parse_args()
 
     args.config = workspace_path(args.config)
@@ -69,7 +71,7 @@ def main() -> int:
     if args.live:
         account_number = args.account or config.get("account_number")
         snapshot = fetch_snapshot(args.endpoint, account_number, list(asset_classes),
-                                  args.token_file)
+                                  args.token_file, verbose=args.verbose)
         if args.save_snapshot:
             save_snapshot(args.save_snapshot, snapshot)
             print(f"Saved current Robinhood snapshot to {args.save_snapshot}", file=sys.stderr)
@@ -157,9 +159,9 @@ def main() -> int:
 
 
 def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
-                   token_file: str) -> dict[str, Any]:
+                   token_file: str, verbose: bool = False) -> dict[str, Any]:
     token = os.environ.get("ROBINHOOD_MCP_TOKEN") or load_access_token(token_file)
-    client = RobinhoodMcpClient(endpoint, token)
+    client = RobinhoodMcpClient(endpoint, token, verbose=verbose)
     client.connect()
     accounts = client.call_tool("get_accounts")
     account_number = account or select_account(accounts)
