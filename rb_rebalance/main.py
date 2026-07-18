@@ -56,7 +56,8 @@ def main() -> int:
     if args.save_snapshot and not args.live:
         parser.error("--save-snapshot requires --live")
     if args.live:
-        snapshot = fetch_snapshot(args.endpoint, args.account, [t.symbol for t in targets],
+        account_number = args.account or config.get("account_number")
+        snapshot = fetch_snapshot(args.endpoint, account_number, [t.symbol for t in targets],
                                   args.token_file)
         if args.save_snapshot:
             save_snapshot(args.save_snapshot, snapshot)

@@ -32,7 +32,14 @@ cp snapshot.example.json snapshot.json
 
 `config.json` and `snapshot.json` are ignored by Git, while the example files
 remain checked in as documentation. Edit `config.json` with your actual target
-allocation, then run:
+allocation. You may also store the Robinhood account number in this ignored file:
+
+```json
+"account_number": "YOUR_ACCOUNT_NUMBER"
+```
+
+Replace the existing `"account_number": null` line; the snippet above is only
+that one field, not a complete config file. Then run:
 
 ```sh
 bazel test //...
@@ -75,8 +82,13 @@ to both `//:authenticate` and `//:rebalance`.
 After authentication:
 
 ```sh
-bazel run //:rebalance -- --live --account 'YOUR_ACCOUNT_NUMBER'
+bazel run //:rebalance -- --live
 ```
+
+For live requests, account selection uses `--account` first, then
+`account_number` from `config.json`, and finally automatic selection when
+Robinhood returns exactly one recognizable account. This makes `--account`
+useful as a one-run override without editing the config.
 
 The rebalancer reads the saved token and refreshes it automatically when needed.
 `ROBINHOOD_MCP_TOKEN` is still supported as a temporary override, but storing a
@@ -95,8 +107,7 @@ and quotes and atomically replace the default snapshot:
 ```sh
 bazel run //:rebalance -- \
   --live \
-  --save-snapshot \
-  --account 'YOUR_ACCOUNT_NUMBER'
+  --save-snapshot
 ```
 
 The command both prints the current rebalance plan and writes normalized broker
@@ -107,7 +118,7 @@ To write another file, put its path after the option:
 
 ```sh
 bazel run //:rebalance -- --live --save-snapshot snapshots/2026-07-18.json \
-  --account 'YOUR_ACCOUNT_NUMBER'
+  --account 'AN_OPTIONAL_ONE_RUN_OVERRIDE'
 ```
 
 Snapshot contents are account-sensitive because they include symbols, quantities,

@@ -1,4 +1,5 @@
 {
+  "account_number": null,
   "target_cash": -2000,
   "minimum_trade": 5,
   "liquidate_unconfigured": false,
@@ -8,4 +9,3 @@
     {"symbol": "BND", "asset_class": "bond", "weight": 0.20}
   ]
 }
-
