@@ -23,17 +23,26 @@ equity tools treat ETFs as equities.
 
 ## Run offline
 
-Edit `config.example.json`, then test with the included snapshot:
+Create local working files from the checked-in examples:
+
+```sh
+cp config.example.json config.json
+cp snapshot.example.json snapshot.json
+```
+
+`config.json` and `snapshot.json` are ignored by Git, while the example files
+remain checked in as documentation. Edit `config.json` with your actual target
+allocation, then run:
 
 ```sh
 bazel test //...
-bazel run //:rebalance -- \
-  --config "$PWD/config.example.json" \
-  --snapshot "$PWD/snapshot.example.json"
+bazel run //:rebalance
 ```
 
-Add `--json` for machine-readable output. Set `liquidate_unconfigured` to true
-only if holdings omitted from the targets should appear as full sells.
+The default run reads `config.json` and `snapshot.json` and makes no network
+requests. Override them with `--config PATH` or `--snapshot PATH`. Add `--json`
+for machine-readable output. Set `liquidate_unconfigured` to true only if
+holdings omitted from the targets should appear as full sells.
 
 ## Authenticate with Robinhood
 
@@ -62,9 +71,7 @@ to both `//:authenticate` and `//:rebalance`.
 After authentication:
 
 ```sh
-bazel run //:rebalance -- \
-  --config "$PWD/config.example.json" \
-  --account 'YOUR_ACCOUNT_NUMBER'
+bazel run //:rebalance -- --live --account 'YOUR_ACCOUNT_NUMBER'
 ```
 
 The rebalancer reads the saved token and refreshes it automatically when needed.
@@ -74,3 +81,33 @@ token in shell history or source-controlled files is not recommended.
 The rebalancer calls only `get_accounts`, `get_portfolio`,
 `get_equity_positions`, and `get_equity_quotes`. Robinhood controls OAuth token
 issuance and displays the permissions for you to approve in the browser.
+
+## Create or update `snapshot.json`
+
+First authenticate as described above and make sure `config.json` contains every
+symbol whose current quote is needed. Then fetch live positions, portfolio value,
+and quotes and atomically replace the default snapshot:
+
+```sh
+bazel run //:rebalance -- \
+  --live \
+  --save-snapshot \
+  --account 'YOUR_ACCOUNT_NUMBER'
+```
+
+The command both prints the current rebalance plan and writes normalized broker
+data to `snapshot.json`. Subsequent `bazel run //:rebalance` invocations use that
+saved data without contacting Robinhood.
+
+To write another file, put its path after the option:
+
+```sh
+bazel run //:rebalance -- --live --save-snapshot snapshots/2026-07-18.json \
+  --account 'YOUR_ACCOUNT_NUMBER'
+```
+
+Snapshot contents are account-sensitive because they include symbols, quantities,
+prices, and portfolio value. Only the root-level default `snapshot.json` is
+ignored automatically; add any alternate snapshot directory to `.gitignore` if
+you use one. A snapshot is a point-in-time input, so refresh it before relying on
+the recommendations.

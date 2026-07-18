@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .coverage
 .robinhood-mcp-token.json
+/config.json
+/snapshot.json

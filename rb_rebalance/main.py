@@ -4,7 +4,9 @@ import argparse
 from decimal import Decimal
 import json
 import os
+from pathlib import Path
 import sys
+import tempfile
 from typing import Any
 
 from rb_rebalance.core import Position, Target, calculate, decimal
@@ -13,12 +15,21 @@ from rb_rebalance.oauth import DEFAULT_TOKEN_FILE, OAuthError, load_access_token
 
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
+DEFAULT_CONFIG = "config.json"
+DEFAULT_SNAPSHOT = "snapshot.json"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compute a read-only Robinhood rebalance plan")
-    parser.add_argument("--config", required=True, help="Target allocation JSON")
-    parser.add_argument("--snapshot", help="Offline broker snapshot JSON (skips MCP)")
+    parser.add_argument("--config", default=DEFAULT_CONFIG,
+                        help=f"target allocation JSON (default: {DEFAULT_CONFIG})")
+    parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT,
+                        help=f"offline broker snapshot JSON (default: {DEFAULT_SNAPSHOT})")
+    parser.add_argument("--live", action="store_true",
+                        help="fetch current data from Robinhood instead of reading --snapshot")
+    parser.add_argument("--save-snapshot", nargs="?", const=DEFAULT_SNAPSHOT,
+                        metavar="PATH",
+                        help=f"with --live, save fetched data (default path: {DEFAULT_SNAPSHOT})")
     parser.add_argument("--account", help="Robinhood account number (required if ambiguous)")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
@@ -34,12 +45,23 @@ def main() -> int:
         asset_class=item.get("asset_class", "stock"),
     ) for item in config["targets"]]
 
-    if args.snapshot:
-        with open(args.snapshot, encoding="utf-8") as stream:
-            snapshot = json.load(stream)
-    else:
+    if args.save_snapshot and not args.live:
+        parser.error("--save-snapshot requires --live")
+    if args.live:
         snapshot = fetch_snapshot(args.endpoint, args.account, [t.symbol for t in targets],
                                   args.token_file)
+        if args.save_snapshot:
+            save_snapshot(args.save_snapshot, snapshot)
+            print(f"Saved current Robinhood snapshot to {args.save_snapshot}", file=sys.stderr)
+    else:
+        try:
+            with open(args.snapshot, encoding="utf-8") as stream:
+                snapshot = json.load(stream)
+        except FileNotFoundError as error:
+            raise SystemExit(
+                f"snapshot not found: {args.snapshot}; copy snapshot.example.json or run "
+                "with --live --save-snapshot"
+            ) from error
 
     positions = {
         item["symbol"].upper(): Position(
@@ -88,6 +110,26 @@ def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
     raw_positions = client.call_tool("get_equity_positions", arguments)
     raw_quotes = client.call_tool("get_equity_quotes", {"symbols": symbols})
     return normalize_snapshot(portfolio, raw_positions, raw_quotes)
+
+
+def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:
+    """Atomically replace a normalized snapshot without leaving a partial file."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=target.parent, text=True
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(snapshot, stream, indent=2)
+            stream.write("\n")
+        os.replace(temporary, target)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _select_account(payload: Any) -> str:
