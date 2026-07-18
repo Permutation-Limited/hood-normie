@@ -1,7 +1,7 @@
 from decimal import Decimal
 import unittest
 
-from rb_rebalance.core import Position, Target, calculate
+from rb_rebalance.core import ClassTarget, Position, calculate
 from rb_rebalance.paths import workspace_path
 from rb_rebalance.accounts import select_account
 
@@ -11,23 +11,23 @@ class CalculateTest(unittest.TestCase):
         result = calculate(
             net_liquidation_value=Decimal("10000"),
             target_cash=Decimal("1000"),
-            targets=[Target("VTI", Decimal("0.60"), "stock"),
-                     Target("BND", Decimal("0.40"), "bond")],
+            targets=[ClassTarget("stocks", Decimal("0.60")),
+                     ClassTarget("bonds", Decimal("0.40"))],
+            asset_classes={"VTI": "stocks", "BND": "bonds"},
             positions={
                 "VTI": Position("VTI", Decimal("20"), Decimal("250")),
                 "BND": Position("BND", Decimal("50"), Decimal("80")),
             },
-            prices={"VTI": Decimal("250"), "BND": Decimal("80")},
         )
-        self.assertEqual({r.symbol: r.amount for r in result},
-                         {"BND": Decimal("-400.00"), "VTI": Decimal("400.00")})
+        self.assertEqual({r.asset_class: r.amount for r in result},
+                         {"bonds": Decimal("-400.00"), "stocks": Decimal("400.00")})
 
     def test_negative_cash_creates_margin_exposure(self):
         result = calculate(
             net_liquidation_value=Decimal("10000"), target_cash=Decimal("-2000"),
-            targets=[Target("VTI", Decimal("0.75"), "stock"),
-                     Target("BND", Decimal("0.25"), "bond")],
-            positions={}, prices={"VTI": Decimal("250"), "BND": Decimal("75")},
+            targets=[ClassTarget("stocks", Decimal("0.75")),
+                     ClassTarget("bonds", Decimal("0.25"))],
+            asset_classes={"VTI": "stocks", "BND": "bonds"}, positions={},
         )
         self.assertEqual(sum(r.target_value for r in result), Decimal("12000.00"))
         self.assertEqual(sum(r.amount for r in result), Decimal("12000.00"))
@@ -35,17 +35,42 @@ class CalculateTest(unittest.TestCase):
     def test_minimum_trade_is_suppressed(self):
         result = calculate(
             net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
-            targets=[Target("VTI", Decimal(1), "stock")],
+            targets=[ClassTarget("stocks", Decimal(1))],
+            asset_classes={"VTI": "stocks"},
             positions={"VTI": Position("VTI", Decimal("0.99"), Decimal("100"))},
-            prices={"VTI": Decimal("100")}, minimum_trade=Decimal("5"),
+            minimum_trade=Decimal("5"),
         )
         self.assertEqual(result[0].action, "HOLD")
 
     def test_weights_must_sum_to_one(self):
         with self.assertRaisesRegex(ValueError, "sum to 1"):
             calculate(net_liquidation_value=Decimal(10), target_cash=Decimal(0),
-                      targets=[Target("VTI", Decimal("0.9"), "stock")],
-                      positions={}, prices={"VTI": Decimal(1)})
+                      targets=[ClassTarget("stocks", Decimal("0.9"))],
+                      asset_classes={"VTI": "stocks"}, positions={})
+
+    def test_aggregates_multiple_symbols_into_one_class(self):
+        result = calculate(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            targets=[ClassTarget("stocks", Decimal("0.5")),
+                     ClassTarget("bonds", Decimal("0.5"))],
+            asset_classes={"VTI": "stocks", "VXUS": "stocks", "BND": "bonds"},
+            positions={
+                "VTI": Position("VTI", Decimal("1"), Decimal("300")),
+                "VXUS": Position("VXUS", Decimal("2"), Decimal("100")),
+                "BND": Position("BND", Decimal("5"), Decimal("100")),
+            },
+        )
+        self.assertEqual({r.asset_class: r.current_value for r in result},
+                         {"bonds": Decimal("500.00"), "stocks": Decimal("500.00")})
+        self.assertTrue(all(r.action == "HOLD" for r in result))
+
+    def test_rejects_unmapped_held_symbol(self):
+        with self.assertRaisesRegex(ValueError, "missing from assets config: TSLA"):
+            calculate(
+                net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
+                targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
+                positions={"TSLA": Position("TSLA", Decimal(1), Decimal("100"))},
+            )
 
 
 class WorkspacePathTest(unittest.TestCase):

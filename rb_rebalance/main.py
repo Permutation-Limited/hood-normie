@@ -10,7 +10,7 @@ import tempfile
 from typing import Any
 
 from rb_rebalance.accounts import select_account
-from rb_rebalance.core import Position, Target, calculate, decimal
+from rb_rebalance.core import ClassTarget, Position, calculate, decimal
 from rb_rebalance.mcp import RobinhoodMcpClient
 from rb_rebalance.oauth import DEFAULT_TOKEN_FILE, OAuthError, load_access_token
 from rb_rebalance.paths import workspace_path
@@ -47,17 +47,28 @@ def main() -> int:
 
     with open(args.config, encoding="utf-8") as stream:
         config = json.load(stream)
-    targets = [Target(
-        symbol=item["symbol"].upper(),
+    if "classes" not in config or "assets" not in config:
+        if "targets" in config:
+            raise ValueError(
+                "config uses the old per-symbol targets schema; replace it with "
+                "top-level classes and assets sections (see config.example.json)"
+            )
+        raise ValueError("config must contain top-level classes and assets sections")
+    targets = [ClassTarget(
+        name=item["name"],
         weight=decimal(item["weight"]),
-        asset_class=item.get("asset_class", "stock"),
-    ) for item in config["targets"]]
+    ) for item in config["classes"]]
+    asset_classes = {
+        item["symbol"].upper(): item["class"] for item in config["assets"]
+    }
+    if len(asset_classes) != len(config["assets"]):
+        raise ValueError("asset symbols must be unique")
 
     if args.save_snapshot and not args.live:
         parser.error("--save-snapshot requires --live")
     if args.live:
         account_number = args.account or config.get("account_number")
-        snapshot = fetch_snapshot(args.endpoint, account_number, [t.symbol for t in targets],
+        snapshot = fetch_snapshot(args.endpoint, account_number, list(asset_classes),
                                   args.token_file)
         if args.save_snapshot:
             save_snapshot(args.save_snapshot, snapshot)
@@ -77,31 +88,28 @@ def main() -> int:
             item["symbol"].upper(), decimal(item["quantity"]), decimal(item["price"])
         ) for item in snapshot["positions"]
     }
-    prices = {key.upper(): decimal(value) for key, value in snapshot.get("prices", {}).items()}
     recommendations = calculate(
         net_liquidation_value=decimal(snapshot["net_liquidation_value"]),
         target_cash=decimal(config.get("target_cash", 0)),
         targets=targets,
+        asset_classes=asset_classes,
         positions=positions,
-        prices=prices,
         minimum_trade=decimal(config.get("minimum_trade", 0)),
-        liquidate_unconfigured=bool(config.get("liquidate_unconfigured", False)),
     )
     if args.json:
         print(json.dumps([{
-            "symbol": r.symbol, "asset_class": r.asset_class, "action": r.action,
-            "amount": str(abs(r.amount)), "shares": str(abs(r.shares)),
+            "asset_class": r.asset_class, "action": r.action,
+            "amount": str(abs(r.amount)),
             "current_value": str(r.current_value), "target_value": str(r.target_value),
-            "price": str(r.price),
         } for r in recommendations], indent=2))
     else:
-        print("ACTION SYMBOL CLASS          AMOUNT       SHARES      CURRENT       TARGET")
+        print("ACTION CLASS              AMOUNT      CURRENT       TARGET")
         for r in recommendations:
-            print(f"{r.action:<6} {r.symbol:<6} {r.asset_class:<8} "
-                  f"${abs(r.amount):>11,.2f} {abs(r.shares):>12,f} "
+            print(f"{r.action:<6} {r.asset_class:<12} "
+                  f"${abs(r.amount):>11,.2f} "
                   f"${r.current_value:>11,.2f} ${r.target_value:>11,.2f}")
         projected_cash = decimal(snapshot["net_liquidation_value"]) - sum(
-            (r.target_value for r in recommendations if r.asset_class != "unconfigured"), Decimal(0)
+            (r.target_value for r in recommendations), Decimal(0)
         )
         print(f"\nProjected cash: ${projected_cash:,.2f}")
     return 0

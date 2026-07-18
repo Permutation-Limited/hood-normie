@@ -6,7 +6,6 @@ from typing import Iterable, Mapping
 
 
 CENT = Decimal("0.01")
-SHARE = Decimal("0.000001")
 
 
 def decimal(value: object) -> Decimal:
@@ -15,10 +14,9 @@ def decimal(value: object) -> Decimal:
 
 
 @dataclass(frozen=True)
-class Target:
-    symbol: str
+class ClassTarget:
+    name: str
     weight: Decimal
-    asset_class: str
 
 
 @dataclass(frozen=True)
@@ -34,13 +32,10 @@ class Position:
 
 @dataclass(frozen=True)
 class Recommendation:
-    symbol: str
     asset_class: str
     current_value: Decimal
     target_value: Decimal
     amount: Decimal
-    price: Decimal
-    shares: Decimal
 
     @property
     def action(self) -> str:
@@ -51,13 +46,13 @@ class Recommendation:
         return "HOLD"
 
 
-def validate_targets(targets: Iterable[Target]) -> list[Target]:
+def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
     result = list(targets)
     if not result:
         raise ValueError("at least one target is required")
-    symbols = [target.symbol for target in result]
-    if len(symbols) != len(set(symbols)):
-        raise ValueError("target symbols must be unique")
+    names = [target.name for target in result]
+    if len(names) != len(set(names)):
+        raise ValueError("class names must be unique")
     if any(target.weight < 0 for target in result):
         raise ValueError("target weights cannot be negative")
     total = sum((target.weight for target in result), Decimal(0))
@@ -70,13 +65,12 @@ def calculate(
     *,
     net_liquidation_value: Decimal,
     target_cash: Decimal,
-    targets: Iterable[Target],
+    targets: Iterable[ClassTarget],
+    asset_classes: Mapping[str, str],
     positions: Mapping[str, Position],
-    prices: Mapping[str, Decimal],
     minimum_trade: Decimal = Decimal(0),
-    liquidate_unconfigured: bool = False,
 ) -> list[Recommendation]:
-    """Return dollar/share deltas needed to reach the configured allocation.
+    """Return class-level dollar deltas needed to reach the allocation.
 
     Weights apply to invested value, not net liquidation value. Thus a negative
     target_cash deliberately makes invested value greater than account equity.
@@ -86,49 +80,41 @@ def calculate(
     if invested_target < 0:
         raise ValueError("target cash cannot exceed net liquidation value")
 
+    class_names = {target.name for target in checked_targets}
+    unknown_classes = sorted(set(asset_classes.values()) - class_names)
+    if unknown_classes:
+        raise ValueError(f"assets reference undefined classes: {', '.join(unknown_classes)}")
+    unmapped = sorted(symbol for symbol in positions if symbol not in asset_classes)
+    if unmapped:
+        raise ValueError(
+            "held symbols are missing from assets config: " + ", ".join(unmapped)
+        )
+
+    current_by_class = {name: Decimal(0) for name in class_names}
+    for symbol, position in positions.items():
+        current_by_class[asset_classes[symbol]] += position.market_value
+
     recommendations: list[Recommendation] = []
-    target_symbols = {target.symbol for target in checked_targets}
     for target in checked_targets:
-        position = positions.get(target.symbol)
-        price = prices.get(target.symbol) or (position.price if position else None)
-        if price is None or price <= 0:
-            raise ValueError(f"missing positive price for {target.symbol}")
-        current = position.market_value if position else Decimal(0)
+        current = current_by_class[target.name]
         desired = invested_target * target.weight
         amount = desired - current
         if abs(amount) < minimum_trade:
             amount = Decimal(0)
-        recommendations.append(_recommendation(target, current, desired, amount, price))
-
-    if liquidate_unconfigured:
-        for symbol, position in positions.items():
-            if symbol not in target_symbols and position.market_value != 0:
-                recommendations.append(_recommendation(
-                    Target(symbol, Decimal(0), "unconfigured"),
-                    position.market_value,
-                    Decimal(0),
-                    -position.market_value,
-                    position.price,
-                ))
-    return sorted(recommendations, key=lambda item: item.symbol)
+        recommendations.append(_recommendation(target, current, desired, amount))
+    return sorted(recommendations, key=lambda item: item.asset_class)
 
 
 def _recommendation(
-    target: Target,
+    target: ClassTarget,
     current: Decimal,
     desired: Decimal,
     amount: Decimal,
-    price: Decimal,
 ) -> Recommendation:
     rounded_amount = amount.quantize(CENT, rounding=ROUND_HALF_UP)
-    shares = (rounded_amount / price).quantize(SHARE, rounding=ROUND_HALF_UP)
     return Recommendation(
-        symbol=target.symbol,
-        asset_class=target.asset_class,
+        asset_class=target.name,
         current_value=current.quantize(CENT, rounding=ROUND_HALF_UP),
         target_value=desired.quantize(CENT, rounding=ROUND_HALF_UP),
         amount=rounded_amount,
-        price=price,
-        shares=shares,
     )
-

@@ -1,25 +1,52 @@
 # rb-rebalance
 
 A read-only Bazel/Python tool that retrieves a Robinhood portfolio through the
-official Trading MCP and prints the dollar and fractional-share trades needed
-to reach a configured stock/bond allocation and cash target.
+official Trading MCP and prints the class-level dollar adjustments needed
+to reach a configured asset-class allocation and cash target. Recommendations
+are class-level dollar amounts; the tool does not choose which symbol to trade.
 
 It **does not place orders**. Review every recommendation, margin availability,
 buying power, taxes, and unsettled funds yourself.
 
 ## Allocation model
 
-Target weights sum to 1 and apply to invested assets:
+Class weights sum to 1 and apply to invested assets:
 
 ```
 invested target = net liquidation value - target cash
-symbol target   = invested target * symbol weight
-trade amount    = symbol target - current symbol market value
+class target    = invested target * class weight
+trade amount    = class target - current class market value
 ```
 
 Consequently, a `target_cash` of `-2000` intentionally targets $2,000 of margin
-borrowing. Bonds are represented by bond ETF symbols such as `BND`; Robinhood's
-equity tools treat ETFs as equities.
+borrowing. Each held symbol is mapped to a class, and all positions in that class
+are aggregated before calculating the recommendation.
+
+## Configuration model
+
+`classes` defines the allocation policy. `assets` only classifies symbols:
+
+```json
+{
+  "account_number": null,
+  "target_cash": -2000,
+  "minimum_trade": 5,
+  "classes": [
+    {"name": "stocks", "weight": 0.80},
+    {"name": "bonds", "weight": 0.20}
+  ],
+  "assets": [
+    {"symbol": "VTI", "class": "stocks"},
+    {"symbol": "VXUS", "class": "stocks"},
+    {"symbol": "BND", "class": "bonds"}
+  ]
+}
+```
+
+The output says how many dollars of each class to buy or sell. It deliberately
+does not divide that amount among `VTI`, `VXUS`, or other symbols. Every held
+equity/ETF symbol must appear in `assets`; an unmapped holding causes an error
+instead of silently producing an incorrect allocation.
 
 ## Run offline
 
@@ -48,8 +75,7 @@ bazel run //:rebalance
 
 The default run reads `config.json` and `snapshot.json` and makes no network
 requests. Override them with `--config PATH` or `--snapshot PATH`. Add `--json`
-for machine-readable output. Set `liquidate_unconfigured` to true only if
-holdings omitted from the targets should appear as full sells.
+for machine-readable output.
 
 Relative paths are resolved from the workspace directory where you invoked
 `bazel run`, not from Bazel's internal runfiles directory. Absolute paths work
@@ -100,8 +126,8 @@ issuance and displays the permissions for you to approve in the browser.
 
 ## Create or update `snapshot.json`
 
-First authenticate as described above and make sure `config.json` contains every
-symbol whose current quote is needed. Then fetch live positions, portfolio value,
+First authenticate as described above and make sure `config.json` maps every held
+symbol to a class. Then fetch live positions, portfolio value,
 and quotes and atomically replace the default snapshot:
 
 ```sh
