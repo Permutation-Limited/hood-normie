@@ -142,22 +142,39 @@ def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:
 
 
 def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str, Any]:
-    portfolio_record = _records(portfolio, "portfolios", "portfolio")[0]
-    net_value = _first(portfolio_record, "net_liquidation_value", "netLiquidationValue",
-                       "total_value", "totalValue", "equity")
+    value_fields = (
+        "net_liquidation_value", "netLiquidationValue",
+        "net_liquidation", "netLiquidation",
+        "total_value", "totalValue",
+        "total_equity", "totalEquity",
+        "portfolio_value", "portfolioValue",
+        "portfolio_equity", "portfolioEquity",
+        "equity",
+    )
+    portfolio_record = _find_record_with_field(portfolio, value_fields)
+    net_value = _money_value(_first(portfolio_record, *value_fields)) if portfolio_record else None
     if net_value is None:
-        raise SystemExit("could not find net liquidation/total value in get_portfolio response")
+        raise SystemExit(
+            "could not find net liquidation/total value in get_portfolio response. "
+            f"Response shape (values omitted): {_response_shape(portfolio)}"
+        )
+    price_fields = (
+        "price", "mark_price", "markPrice", "last_trade_price", "lastTradePrice",
+        "last_price", "lastPrice", "current_price", "currentPrice",
+    )
     quote_map = {}
-    for quote in _records(quotes, "quotes", "results"):
+    for quote in _find_records_with_fields(quotes, ("symbol",), price_fields):
         symbol = _first(quote, "symbol")
-        price = _first(quote, "price", "mark_price", "markPrice", "last_trade_price")
+        price = _money_value(_first(quote, *price_fields))
         if symbol and price is not None:
             quote_map[str(symbol).upper()] = price
     normalized_positions = []
-    for position in _records(positions, "positions", "results"):
+    for position in _find_records_with_fields(positions, ("symbol",), ("quantity", "shares")):
         symbol = str(_first(position, "symbol") or "").upper()
-        quantity = _first(position, "quantity", "shares")
-        price = quote_map.get(symbol) or _first(position, "price", "market_price", "marketPrice")
+        quantity = _money_value(_first(position, "quantity", "shares"))
+        price = quote_map.get(symbol) or _money_value(
+            _first(position, *price_fields, "market_price", "marketPrice")
+        )
         if symbol and quantity is not None and price is not None:
             normalized_positions.append({"symbol": symbol, "quantity": quantity, "price": price})
     return {"net_liquidation_value": net_value, "positions": normalized_positions,
@@ -180,6 +197,59 @@ def _records(payload: Any, *keys: str) -> list[dict[str, Any]]:
 
 def _first(record: dict[str, Any], *keys: str) -> Any:
     return next((record[key] for key in keys if record.get(key) is not None), None)
+
+
+def _find_record_with_field(payload: Any, fields: tuple[str, ...]) -> dict[str, Any] | None:
+    """Depth-first search through MCP content wrappers for a matching record."""
+    if isinstance(payload, dict):
+        if any(payload.get(field) is not None for field in fields):
+            return payload
+        for value in payload.values():
+            found = _find_record_with_field(value, fields)
+            if found is not None:
+                return found
+    elif isinstance(payload, list):
+        for value in payload:
+            found = _find_record_with_field(value, fields)
+            if found is not None:
+                return found
+    return None
+
+
+def _find_records_with_fields(
+    payload: Any, required: tuple[str, ...], alternatives: tuple[str, ...]
+) -> list[dict[str, Any]]:
+    """Find nested records containing required keys and one alternative key."""
+    found: list[dict[str, Any]] = []
+    if isinstance(payload, dict):
+        if (all(payload.get(field) is not None for field in required)
+                and any(payload.get(field) is not None for field in alternatives)):
+            found.append(payload)
+        else:
+            for value in payload.values():
+                found.extend(_find_records_with_fields(value, required, alternatives))
+    elif isinstance(payload, list):
+        for value in payload:
+            found.extend(_find_records_with_fields(value, required, alternatives))
+    return found
+
+
+def _money_value(value: Any) -> Any:
+    """Unwrap common structured-money representations while preserving scalars."""
+    if isinstance(value, dict):
+        return _first(value, "amount", "value", "decimal", "units")
+    return value
+
+
+def _response_shape(payload: Any, depth: int = 0) -> Any:
+    """Return keys and container types without leaking financial values."""
+    if depth >= 5:
+        return "..."
+    if isinstance(payload, dict):
+        return {key: _response_shape(value, depth + 1) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [_response_shape(payload[0], depth + 1)] if payload else []
+    return type(payload).__name__
 
 
 if __name__ == "__main__":
