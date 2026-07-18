@@ -35,21 +35,42 @@ bazel run //:rebalance -- \
 Add `--json` for machine-readable output. Set `liquidate_unconfigured` to true
 only if holdings omitted from the targets should appear as full sells.
 
-## Run against Robinhood MCP
+## Authenticate with Robinhood
 
-Robinhood's endpoint is `https://agent.robinhood.com/mcp/trading`. Authenticate
-with Robinhood using an MCP-capable client and supply its OAuth access token as
-an environment variable (never put it in the config or source tree):
+Robinhood's endpoint uses OAuth 2.1 with browser approval. Run the authentication
+helper from a desktop with a browser:
 
 ```sh
-export ROBINHOOD_MCP_TOKEN='...'
+bazel run //:authenticate
+```
+
+The helper:
+
+1. Discovers Robinhood's OAuth endpoints from its MCP metadata.
+2. Dynamically registers this local program as a public OAuth client.
+3. Opens Robinhood in your browser using PKCE protection.
+4. Waits on a loopback-only callback (`127.0.0.1`) for approval.
+5. Saves the access and refresh tokens to `.robinhood-mcp-token.json` with file
+   mode `0600` (readable and writable only by your user).
+
+The token file is ignored by Git. Treat it like a password: never commit, paste,
+or share it. To keep it elsewhere, pass `--token-file /secure/path/token.json`
+to both `//:authenticate` and `//:rebalance`.
+
+## Run against Robinhood MCP
+
+After authentication:
+
+```sh
 bazel run //:rebalance -- \
   --config "$PWD/config.example.json" \
   --account 'YOUR_ACCOUNT_NUMBER'
 ```
 
-The program calls only `get_accounts`, `get_portfolio`,
-`get_equity_positions`, and `get_equity_quotes`. Robinhood controls OAuth token
-issuance; if your MCP client does not expose its token, use that client to save
-those tool results in the normalized shape shown by `snapshot.example.json`.
+The rebalancer reads the saved token and refreshes it automatically when needed.
+`ROBINHOOD_MCP_TOKEN` is still supported as a temporary override, but storing a
+token in shell history or source-controlled files is not recommended.
 
+The rebalancer calls only `get_accounts`, `get_portfolio`,
+`get_equity_positions`, and `get_equity_quotes`. Robinhood controls OAuth token
+issuance and displays the permissions for you to approve in the browser.

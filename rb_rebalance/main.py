@@ -9,6 +9,7 @@ from typing import Any
 
 from rb_rebalance.core import Position, Target, calculate, decimal
 from rb_rebalance.mcp import RobinhoodMcpClient
+from rb_rebalance.oauth import DEFAULT_TOKEN_FILE, OAuthError, load_access_token
 
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
@@ -20,6 +21,8 @@ def main() -> int:
     parser.add_argument("--snapshot", help="Offline broker snapshot JSON (skips MCP)")
     parser.add_argument("--account", help="Robinhood account number (required if ambiguous)")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
+                        help="OAuth token file created by //:authenticate")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     args = parser.parse_args()
 
@@ -35,7 +38,8 @@ def main() -> int:
         with open(args.snapshot, encoding="utf-8") as stream:
             snapshot = json.load(stream)
     else:
-        snapshot = fetch_snapshot(args.endpoint, args.account, [t.symbol for t in targets])
+        snapshot = fetch_snapshot(args.endpoint, args.account, [t.symbol for t in targets],
+                                  args.token_file)
 
     positions = {
         item["symbol"].upper(): Position(
@@ -72,10 +76,9 @@ def main() -> int:
     return 0
 
 
-def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str]) -> dict[str, Any]:
-    token = os.environ.get("ROBINHOOD_MCP_TOKEN")
-    if not token:
-        raise SystemExit("ROBINHOOD_MCP_TOKEN is required unless --snapshot is used")
+def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
+                   token_file: str) -> dict[str, Any]:
+    token = os.environ.get("ROBINHOOD_MCP_TOKEN") or load_access_token(token_file)
     client = RobinhoodMcpClient(endpoint, token)
     client.connect()
     accounts = client.call_tool("get_accounts")
@@ -141,7 +144,6 @@ def _first(record: dict[str, Any], *keys: str) -> Any:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (ValueError, KeyError) as error:
+    except (ValueError, KeyError, OAuthError) as error:
         print(f"error: {error}", file=sys.stderr)
         sys.exit(2)
-

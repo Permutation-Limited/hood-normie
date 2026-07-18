@@ -8,7 +8,15 @@ py_library(
         "rb_rebalance/__init__.py",
         "rb_rebalance/core.py",
         "rb_rebalance/mcp.py",
+        "rb_rebalance/oauth.py",
     ],
+)
+
+py_binary(
+    name = "authenticate",
+    srcs = ["rb_rebalance/authenticate.py"],
+    main = "rb_rebalance/authenticate.py",
+    deps = [":rebalance_lib"],
 )
 
 py_binary(
