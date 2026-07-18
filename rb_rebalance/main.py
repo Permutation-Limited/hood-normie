@@ -168,7 +168,9 @@ def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
     arguments = {"account_number": account_number}
     portfolio = client.call_tool("get_portfolio", arguments)
     raw_positions = client.call_tool("get_equity_positions", arguments)
-    raw_quotes = client.call_tool("get_equity_quotes", {"symbols": symbols})
+    held_symbols = _position_symbols(raw_positions)
+    quote_symbols = sorted(set(symbols) | set(held_symbols))
+    raw_quotes = client.call_tool("get_equity_quotes", {"symbols": quote_symbols})
     snapshot = normalize_snapshot(portfolio, raw_positions, raw_quotes)
     snapshot["account_number"] = account_number
     return snapshot
@@ -222,14 +224,25 @@ def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str,
         if symbol and price is not None:
             quote_map[str(symbol).upper()] = price
     normalized_positions = []
-    for position in _find_records_with_fields(positions, ("symbol",), ("quantity", "shares")):
+    missing_prices = []
+    for position in _position_records(positions):
         symbol = str(_first(position, "symbol") or "").upper()
         quantity = _money_value(_first(position, "quantity", "shares"))
         price = quote_map.get(symbol) or _money_value(
             _first(position, *price_fields, "market_price", "marketPrice")
         )
-        if symbol and quantity is not None and price is not None:
-            normalized_positions.append({"symbol": symbol, "quantity": quantity, "price": price})
+        if symbol and quantity is not None:
+            if price is None:
+                missing_prices.append(symbol)
+            else:
+                normalized_positions.append(
+                    {"symbol": symbol, "quantity": quantity, "price": price}
+                )
+    if missing_prices:
+        raise SystemExit(
+            "Robinhood returned positions without usable quotes for: "
+            + ", ".join(sorted(missing_prices))
+        )
     return {"net_liquidation_value": net_value, "positions": normalized_positions,
             "prices": quote_map}
 
@@ -285,6 +298,19 @@ def _find_records_with_fields(
         for value in payload:
             found.extend(_find_records_with_fields(value, required, alternatives))
     return found
+
+
+def _position_records(payload: Any) -> list[dict[str, Any]]:
+    return _find_records_with_fields(payload, ("symbol",), ("quantity", "shares"))
+
+
+def _position_symbols(payload: Any) -> list[str]:
+    """Extract held symbols before quotes are requested."""
+    return sorted({
+        str(_first(position, "symbol")).upper()
+        for position in _position_records(payload)
+        if _first(position, "symbol")
+    })
 
 
 def _money_value(value: Any) -> Any:

@@ -131,6 +131,9 @@ token in shell history or source-controlled files is not recommended.
 The rebalancer calls only `get_accounts`, `get_portfolio`,
 `get_equity_positions`, and `get_equity_quotes`. Robinhood controls OAuth token
 issuance and displays the permissions for you to approve in the browser.
+It reads positions before requesting quotes, so quotes include every held symbol
+as well as every symbol configured in `assets`. A held symbol is never silently
+dropped when its quote is missing; the run stops with an explicit error instead.
 
 ### Verbose MCP diagnostics
 
