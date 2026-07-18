@@ -32,8 +32,8 @@ are aggregated before calculating the recommendation.
   "target_cash": -2000,
   "minimum_trade": 5,
   "classes": [
-    {"name": "stocks", "weight": 0.80},
-    {"name": "bonds", "weight": 0.20}
+    {"name": "stocks", "weight": 0.80, "target_amount": null},
+    {"name": "bonds", "weight": 0.20, "target_amount": null}
   ],
   "assets": [
     {"symbol": "VTI", "class": "stocks"},
@@ -49,6 +49,24 @@ equity/ETF symbol should appear in `assets`. Unmapped holdings produce a warning
 before the recommendations and are excluded from current class balances. The
 result therefore assumes their value will be sold or reassigned; classify them
 before relying on the recommendations.
+
+### Fixed dollar class targets
+
+Set `target_amount` on a class to target an exact dollar value. It takes priority
+over that class's `weight`:
+
+```json
+"classes": [
+  {"name": "stocks", "weight": 0.80, "target_amount": null},
+  {"name": "bonds", "weight": 0.20, "target_amount": 250000}
+]
+```
+
+The program first reserves `$250,000` for bonds. It then distributes the
+remaining investable value among classes whose `target_amount` is `null`, in
+proportion to their weights. This preserves `target_cash` while ensuring fixed
+dollar targets win over percentage targets. A percentage-only class must have a
+weight; a fixed-dollar class may omit its weight entirely.
 
 Before recommendations, human-readable output includes a current-assets table
 with each symbol's mapped class, quantity, price, and market value. The heading

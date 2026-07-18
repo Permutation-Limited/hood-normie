@@ -58,7 +58,9 @@ def main() -> int:
         raise ValueError("config must contain top-level classes and assets sections")
     targets = [ClassTarget(
         name=item["name"],
-        weight=decimal(item["weight"]),
+        weight=decimal(item["weight"]) if item.get("weight") is not None else None,
+        target_amount=(decimal(item["target_amount"])
+                       if item.get("target_amount") is not None else None),
     ) for item in config["classes"]]
     asset_classes = {
         item["symbol"].upper(): item["class"] for item in config["assets"]

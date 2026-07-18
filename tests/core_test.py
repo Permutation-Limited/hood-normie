@@ -73,6 +73,42 @@ class CalculateTest(unittest.TestCase):
         self.assertEqual(result[0].current_value, Decimal("0.00"))
         self.assertEqual(result[0].amount, Decimal("100.00"))
 
+    def test_fixed_dollar_target_overrides_weight(self):
+        result = calculate(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal("100"),
+            targets=[
+                ClassTarget("stocks", Decimal("0.8")),
+                ClassTarget("bonds", Decimal("0.2"), Decimal("300")),
+            ],
+            asset_classes={"VTI": "stocks", "BND": "bonds"},
+            positions={
+                "VTI": Position("VTI", Decimal(1), Decimal("500")),
+                "BND": Position("BND", Decimal(1), Decimal("200")),
+            },
+        )
+        by_class = {item.asset_class: item for item in result}
+        self.assertEqual(by_class["bonds"].target_value, Decimal("300.00"))
+        self.assertEqual(by_class["bonds"].amount, Decimal("100.00"))
+        self.assertEqual(by_class["stocks"].target_value, Decimal("600.00"))
+        self.assertEqual(by_class["stocks"].amount, Decimal("100.00"))
+
+    def test_multiple_percentage_classes_split_remainder_proportionally(self):
+        result = calculate(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            targets=[
+                ClassTarget("us_stocks", Decimal("0.6")),
+                ClassTarget("intl_stocks", Decimal("0.2")),
+                ClassTarget("bonds", Decimal("0.2"), Decimal("200")),
+            ],
+            asset_classes={}, positions={},
+        )
+        targets = {item.asset_class: item.target_value for item in result}
+        self.assertEqual(targets, {
+            "bonds": Decimal("200.00"),
+            "intl_stocks": Decimal("200.00"),
+            "us_stocks": Decimal("600.00"),
+        })
+
 
 class WorkspacePathTest(unittest.TestCase):
     def test_relative_path_uses_bazel_workspace(self):

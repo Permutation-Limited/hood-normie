@@ -16,7 +16,8 @@ def decimal(value: object) -> Decimal:
 @dataclass(frozen=True)
 class ClassTarget:
     name: str
-    weight: Decimal
+    weight: Decimal | None = None
+    target_amount: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -53,11 +54,19 @@ def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
     names = [target.name for target in result]
     if len(names) != len(set(names)):
         raise ValueError("class names must be unique")
-    if any(target.weight < 0 for target in result):
+    if any(target.weight is not None and target.weight < 0 for target in result):
         raise ValueError("target weights cannot be negative")
-    total = sum((target.weight for target in result), Decimal(0))
-    if abs(total - Decimal(1)) > Decimal("0.000001"):
-        raise ValueError(f"target weights must sum to 1; got {total}")
+    if any(target.target_amount is not None and target.target_amount < 0 for target in result):
+        raise ValueError("class target amounts cannot be negative")
+    variable = [target for target in result if target.target_amount is None]
+    if any(target.weight is None for target in variable):
+        missing = ", ".join(target.name for target in variable if target.weight is None)
+        raise ValueError(f"classes without target_amount require weight: {missing}")
+    variable_weight = sum((target.weight for target in variable), Decimal(0))
+    if variable and variable_weight <= 0:
+        raise ValueError("percentage-targeted class weights must total more than zero")
+    if len(variable) == len(result) and abs(variable_weight - Decimal(1)) > Decimal("0.000001"):
+        raise ValueError(f"target weights must sum to 1; got {variable_weight}")
     return result
 
 
@@ -80,6 +89,26 @@ def calculate(
     if invested_target < 0:
         raise ValueError("target cash cannot exceed net liquidation value")
 
+    fixed_total = sum(
+        (target.target_amount for target in checked_targets
+         if target.target_amount is not None),
+        Decimal(0),
+    )
+    remaining_target = invested_target - fixed_total
+    if remaining_target < 0:
+        raise ValueError(
+            f"fixed class targets ({fixed_total}) exceed investable target ({invested_target})"
+        )
+    variable_targets = [
+        target for target in checked_targets if target.target_amount is None
+    ]
+    variable_weight = sum((target.weight for target in variable_targets), Decimal(0))
+    if not variable_targets and remaining_target != 0:
+        raise ValueError(
+            "fixed class targets do not consume the investable target and no "
+            "percentage-targeted class can receive the remainder"
+        )
+
     class_names = {target.name for target in checked_targets}
     unknown_classes = sorted(set(asset_classes.values()) - class_names)
     if unknown_classes:
@@ -93,7 +122,8 @@ def calculate(
     recommendations: list[Recommendation] = []
     for target in checked_targets:
         current = current_by_class[target.name]
-        desired = invested_target * target.weight
+        desired = (target.target_amount if target.target_amount is not None else
+                   remaining_target * target.weight / variable_weight)
         amount = desired - current
         if abs(amount) < minimum_trade:
             amount = Decimal(0)
