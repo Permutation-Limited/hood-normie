@@ -111,8 +111,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_cash_buy_means_cash_increases(self):
         result = calculate_cash(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal("200"),
-            positions={"VTI": Position("VTI", Decimal(1), Decimal("900"))},
+            current_cash=Decimal("100"), target_cash=Decimal("200"),
         )
         self.assertEqual(result.current_value, Decimal("100.00"))
         self.assertEqual(result.target_value, Decimal("200.00"))
@@ -121,8 +120,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_cash_sell_means_cash_decreases(self):
         result = calculate_cash(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal("-100"),
-            positions={"VTI": Position("VTI", Decimal(1), Decimal("900"))},
+            current_cash=Decimal("100"), target_cash=Decimal("-100"),
         )
         self.assertEqual(result.amount, Decimal("-200.00"))
         self.assertEqual(result.action, "SELL")

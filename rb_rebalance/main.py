@@ -93,6 +93,12 @@ def main() -> int:
         ) for item in snapshot["positions"]
     }
     net_liquidation_value = decimal(snapshot["net_liquidation_value"])
+    if "cash" not in snapshot:
+        raise ValueError(
+            "snapshot has no broker-reported cash value; refresh it with "
+            "--live --save-snapshot or add the Robinhood cash field"
+        )
+    current_cash = decimal(snapshot["cash"])
     target_cash = decimal(config.get("target_cash", 0))
     minimum_trade = decimal(config.get("minimum_trade", 0))
     recommendations = calculate(
@@ -104,9 +110,8 @@ def main() -> int:
         minimum_trade=minimum_trade,
     )
     cash_recommendation = calculate_cash(
-        net_liquidation_value=net_liquidation_value,
+        current_cash=current_cash,
         target_cash=target_cash,
-        positions=positions,
         minimum_trade=minimum_trade,
     )
     output_recommendations = recommendations + [cash_recommendation]
@@ -225,6 +230,12 @@ def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str,
             "could not find net liquidation/total value in get_portfolio response. "
             f"Response shape (values omitted): {_response_shape(portfolio)}"
         )
+    cash = _money_value(_first(portfolio_record, "cash"))
+    if cash is None:
+        raise SystemExit(
+            "could not find broker-reported cash in get_portfolio response. "
+            f"Response shape (values omitted): {_response_shape(portfolio)}"
+        )
     price_fields = (
         "price", "mark_price", "markPrice", "last_trade_price", "lastTradePrice",
         "last_price", "lastPrice", "current_price", "currentPrice",
@@ -255,8 +266,8 @@ def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str,
             "Robinhood returned positions without usable quotes for: "
             + ", ".join(sorted(missing_prices))
         )
-    return {"net_liquidation_value": net_value, "positions": normalized_positions,
-            "prices": quote_map}
+    return {"net_liquidation_value": net_value, "cash": cash,
+            "positions": normalized_positions, "prices": quote_map}
 
 
 def _records(payload: Any, *keys: str) -> list[dict[str, Any]]:

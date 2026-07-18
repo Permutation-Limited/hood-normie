@@ -132,13 +132,10 @@ def calculate(
 
 
 def calculate_cash(
-    *, net_liquidation_value: Decimal, target_cash: Decimal,
-    positions: Mapping[str, Position], minimum_trade: Decimal = Decimal(0),
+    *, current_cash: Decimal, target_cash: Decimal,
+    minimum_trade: Decimal = Decimal(0),
 ) -> Recommendation:
-    """Return the implicit cash-class change after accounting for all assets."""
-    current_cash = net_liquidation_value - sum(
-        (position.market_value for position in positions.values()), Decimal(0)
-    )
+    """Return the cash change using the broker-reported current cash value."""
     amount = target_cash - current_cash
     if abs(amount) < minimum_trade:
         amount = Decimal(0)

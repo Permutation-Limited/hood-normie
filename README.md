@@ -51,10 +51,11 @@ result therefore assumes their value will be sold or reassigned; classify them
 before relying on the recommendations.
 
 The recommendation table also contains an implicit `cash` class. Current cash is
-calculated as net liquidation value minus the market value of all listed assets.
-For this row, `BUY cash` means cash should increase and `SELL cash` means cash
-should decrease; the amount is the difference between current cash and
-`target_cash`. Cash is included in `--json` output as well.
+read directly from Robinhood's `get_portfolio` `cash` field; it is not inferred
+from portfolio value and positions. For this row, `BUY cash` means cash should
+increase and `SELL cash` means cash should decrease; the amount is the difference
+between broker-reported cash and `target_cash`. Cash is included in `--json`
+output and saved snapshots. Older snapshots without `cash` must be refreshed.
 
 ### Fixed dollar class targets
 
