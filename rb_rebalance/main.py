@@ -282,7 +282,7 @@ def _print_asset_table(
         total_assets = sum(
             (position.market_value for position in positions.values()), Decimal(0)
         )
-        print(f"{'TOTAL':<33} ${total_assets:>11,.2f}\n")
+        print(f"{'TOTAL':<48}${total_assets:>11,.2f}\n")
     else:
         print("(no positions)\n")
         if label.startswith("ROBINHOOD"):
