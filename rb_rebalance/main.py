@@ -10,7 +10,7 @@ import tempfile
 from typing import Any
 
 from rb_rebalance.accounts import select_account
-from rb_rebalance.core import ClassTarget, Position, calculate, decimal
+from rb_rebalance.core import ClassTarget, Position, calculate, calculate_cash, decimal
 from rb_rebalance.mcp import RobinhoodMcpClient
 from rb_rebalance.oauth import DEFAULT_TOKEN_FILE, OAuthError, load_access_token
 from rb_rebalance.paths import workspace_path
@@ -92,14 +92,24 @@ def main() -> int:
             item["symbol"].upper(), decimal(item["quantity"]), decimal(item["price"])
         ) for item in snapshot["positions"]
     }
+    net_liquidation_value = decimal(snapshot["net_liquidation_value"])
+    target_cash = decimal(config.get("target_cash", 0))
+    minimum_trade = decimal(config.get("minimum_trade", 0))
     recommendations = calculate(
-        net_liquidation_value=decimal(snapshot["net_liquidation_value"]),
-        target_cash=decimal(config.get("target_cash", 0)),
+        net_liquidation_value=net_liquidation_value,
+        target_cash=target_cash,
         targets=targets,
         asset_classes=asset_classes,
         positions=positions,
-        minimum_trade=decimal(config.get("minimum_trade", 0)),
+        minimum_trade=minimum_trade,
     )
+    cash_recommendation = calculate_cash(
+        net_liquidation_value=net_liquidation_value,
+        target_cash=target_cash,
+        positions=positions,
+        minimum_trade=minimum_trade,
+    )
+    output_recommendations = recommendations + [cash_recommendation]
     if not args.json:
         account_label = snapshot.get("account_number") or config.get("account_number")
         heading = "CURRENT ASSETS"
@@ -146,14 +156,14 @@ def main() -> int:
             "asset_class": r.asset_class, "action": r.action,
             "amount": str(abs(r.amount)),
             "current_value": str(r.current_value), "target_value": str(r.target_value),
-        } for r in recommendations], indent=2))
+        } for r in output_recommendations], indent=2))
     else:
         print("ACTION CLASS              AMOUNT      CURRENT       TARGET")
-        for r in recommendations:
+        for r in output_recommendations:
             print(f"{r.action:<6} {r.asset_class:<12} "
                   f"${abs(r.amount):>11,.2f} "
                   f"${r.current_value:>11,.2f} ${r.target_value:>11,.2f}")
-        projected_cash = decimal(snapshot["net_liquidation_value"]) - sum(
+        projected_cash = net_liquidation_value - sum(
             (r.target_value for r in recommendations), Decimal(0)
         )
         print(f"\nProjected cash: ${projected_cash:,.2f}")

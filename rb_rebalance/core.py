@@ -131,6 +131,25 @@ def calculate(
     return sorted(recommendations, key=lambda item: item.asset_class)
 
 
+def calculate_cash(
+    *, net_liquidation_value: Decimal, target_cash: Decimal,
+    positions: Mapping[str, Position], minimum_trade: Decimal = Decimal(0),
+) -> Recommendation:
+    """Return the implicit cash-class change after accounting for all assets."""
+    current_cash = net_liquidation_value - sum(
+        (position.market_value for position in positions.values()), Decimal(0)
+    )
+    amount = target_cash - current_cash
+    if abs(amount) < minimum_trade:
+        amount = Decimal(0)
+    return Recommendation(
+        asset_class="cash",
+        current_value=current_cash.quantize(CENT, rounding=ROUND_HALF_UP),
+        target_value=target_cash.quantize(CENT, rounding=ROUND_HALF_UP),
+        amount=amount.quantize(CENT, rounding=ROUND_HALF_UP),
+    )
+
+
 def _recommendation(
     target: ClassTarget,
     current: Decimal,

@@ -1,7 +1,7 @@
 from decimal import Decimal
 import unittest
 
-from rb_rebalance.core import ClassTarget, Position, calculate
+from rb_rebalance.core import ClassTarget, Position, calculate, calculate_cash
 from rb_rebalance.paths import workspace_path
 from rb_rebalance.accounts import select_account
 
@@ -108,6 +108,24 @@ class CalculateTest(unittest.TestCase):
             "intl_stocks": Decimal("200.00"),
             "us_stocks": Decimal("600.00"),
         })
+
+    def test_cash_buy_means_cash_increases(self):
+        result = calculate_cash(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal("200"),
+            positions={"VTI": Position("VTI", Decimal(1), Decimal("900"))},
+        )
+        self.assertEqual(result.current_value, Decimal("100.00"))
+        self.assertEqual(result.target_value, Decimal("200.00"))
+        self.assertEqual(result.amount, Decimal("100.00"))
+        self.assertEqual(result.action, "BUY")
+
+    def test_cash_sell_means_cash_decreases(self):
+        result = calculate_cash(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal("-100"),
+            positions={"VTI": Position("VTI", Decimal(1), Decimal("900"))},
+        )
+        self.assertEqual(result.amount, Decimal("-200.00"))
+        self.assertEqual(result.action, "SELL")
 
 
 class WorkspacePathTest(unittest.TestCase):

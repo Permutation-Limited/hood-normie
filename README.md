@@ -50,6 +50,12 @@ before the recommendations and are excluded from current class balances. The
 result therefore assumes their value will be sold or reassigned; classify them
 before relying on the recommendations.
 
+The recommendation table also contains an implicit `cash` class. Current cash is
+calculated as net liquidation value minus the market value of all listed assets.
+For this row, `BUY cash` means cash should increase and `SELL cash` means cash
+should decrease; the amount is the difference between current cash and
+`target_cash`. Cash is included in `--json` output as well.
+
 ### Fixed dollar class targets
 
 Set `target_amount` on a class to target an exact dollar value. It takes priority
