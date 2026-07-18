@@ -18,6 +18,7 @@ class ClassTarget:
     name: str
     weight: Decimal | None = None
     target_amount: Decimal | None = None
+    ignore: bool = False
 
 
 @dataclass(frozen=True)
@@ -58,14 +59,20 @@ def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
         raise ValueError("target weights cannot be negative")
     if any(target.target_amount is not None and target.target_amount < 0 for target in result):
         raise ValueError("class target amounts cannot be negative")
-    variable = [target for target in result if target.target_amount is None]
+    ignored = [target for target in result if target.ignore]
+    if any(target.target_amount is not None for target in ignored):
+        raise ValueError("ignored classes cannot have target_amount")
+    active = [target for target in result if not target.ignore]
+    if not active:
+        raise ValueError("at least one non-ignored class is required")
+    variable = [target for target in active if target.target_amount is None]
     if any(target.weight is None for target in variable):
         missing = ", ".join(target.name for target in variable if target.weight is None)
         raise ValueError(f"classes without target_amount require weight: {missing}")
     variable_weight = sum((target.weight for target in variable), Decimal(0))
     if variable and variable_weight <= 0:
         raise ValueError("percentage-targeted class weights must total more than zero")
-    if len(variable) == len(result) and abs(variable_weight - Decimal(1)) > Decimal("0.000001"):
+    if len(variable) == len(active) and abs(variable_weight - Decimal(1)) > Decimal("0.000001"):
         raise ValueError(f"target weights must sum to 1; got {variable_weight}")
     return result
 
@@ -85,13 +92,22 @@ def calculate(
     target_cash deliberately makes invested value greater than account equity.
     """
     checked_targets = validate_targets(targets)
-    invested_target = net_liquidation_value - target_cash
+    class_names = {target.name for target in checked_targets}
+    ignored_classes = {target.name for target in checked_targets if target.ignore}
+    ignored_value = sum(
+        (position.market_value for symbol, position in positions.items()
+         if asset_classes.get(symbol) in ignored_classes or symbol not in asset_classes),
+        Decimal(0),
+    )
+    invested_target = net_liquidation_value - target_cash - ignored_value
     if invested_target < 0:
-        raise ValueError("target cash cannot exceed net liquidation value")
+        raise ValueError(
+            "target cash plus ignored assets cannot exceed net liquidation value"
+        )
 
     fixed_total = sum(
         (target.target_amount for target in checked_targets
-         if target.target_amount is not None),
+         if not target.ignore and target.target_amount is not None),
         Decimal(0),
     )
     remaining_target = invested_target - fixed_total
@@ -100,7 +116,8 @@ def calculate(
             f"fixed class targets ({fixed_total}) exceed investable target ({invested_target})"
         )
     variable_targets = [
-        target for target in checked_targets if target.target_amount is None
+        target for target in checked_targets
+        if not target.ignore and target.target_amount is None
     ]
     variable_weight = sum((target.weight for target in variable_targets), Decimal(0))
     if not variable_targets and remaining_target != 0:
@@ -109,18 +126,19 @@ def calculate(
             "percentage-targeted class can receive the remainder"
         )
 
-    class_names = {target.name for target in checked_targets}
     unknown_classes = sorted(set(asset_classes.values()) - class_names)
     if unknown_classes:
         raise ValueError(f"assets reference undefined classes: {', '.join(unknown_classes)}")
-    current_by_class = {name: Decimal(0) for name in class_names}
+    current_by_class = {target.name: Decimal(0) for target in checked_targets if not target.ignore}
     for symbol, position in positions.items():
         asset_class = asset_classes.get(symbol)
-        if asset_class is not None:
+        if asset_class is not None and asset_class not in ignored_classes:
             current_by_class[asset_class] += position.market_value
 
     recommendations: list[Recommendation] = []
     for target in checked_targets:
+        if target.ignore:
+            continue
         current = current_by_class[target.name]
         desired = (target.target_amount if target.target_amount is not None else
                    remaining_target * target.weight / variable_weight)

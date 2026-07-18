@@ -32,23 +32,37 @@ are aggregated before calculating the recommendation.
   "target_cash": -2000,
   "minimum_trade": 5,
   "classes": [
-    {"name": "stocks", "weight": 0.80, "target_amount": null},
-    {"name": "bonds", "weight": 0.20, "target_amount": null}
+    {"name": "stocks", "weight": 0.80, "target_amount": null, "ignore": false},
+    {"name": "bonds", "weight": 0.20, "target_amount": null, "ignore": false},
+    {"name": "legacy", "ignore": true}
   ],
   "assets": [
     {"symbol": "VTI", "class": "stocks"},
     {"symbol": "VXUS", "class": "stocks"},
-    {"symbol": "BND", "class": "bonds"}
+    {"symbol": "BND", "class": "bonds"},
+    {"symbol": "OLD", "class": "legacy"}
   ]
 }
 ```
 
 The output says how many dollars of each class to buy or sell. It deliberately
 does not divide that amount among `VTI`, `VXUS`, or other symbols. Every held
-equity/ETF symbol should appear in `assets`. Unmapped holdings produce a warning
-before the recommendations and are excluded from current class balances. The
-result therefore assumes their value will be sold or reassigned; classify them
-before relying on the recommendations.
+equity/ETF symbol may appear in `assets`. Unmapped holdings are implicitly ignored
+and produce a notice before the recommendations.
+
+### Ignored classes
+
+Set `"ignore": true` on a class to leave its assets entirely outside allocation
+calculations. Ignored and unclassified asset values are subtracted from the
+allocation base and excluded from active class balances; the program assumes no
+trade in them. Ignored classes do not produce recommendation rows and cannot have
+`target_amount`. Their assets remain visible in the current-assets table.
+
+The active allocation base is:
+
+```text
+net liquidation value - target cash - ignored/unclassified asset value
+```
 
 The recommendation table also contains an implicit `cash` class. Current cash is
 read directly from Robinhood's `get_portfolio` `cash` field; it is not inferred

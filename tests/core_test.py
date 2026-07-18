@@ -64,14 +64,31 @@ class CalculateTest(unittest.TestCase):
                          {"bonds": Decimal("500.00"), "stocks": Decimal("500.00")})
         self.assertTrue(all(r.action == "HOLD" for r in result))
 
-    def test_excludes_unmapped_held_symbol_from_class_balance(self):
+    def test_unmapped_symbol_is_ignored_from_balance_and_allocation_base(self):
         result = calculate(
             net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
             targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
             positions={"TSLA": Position("TSLA", Decimal(1), Decimal("100"))},
         )
         self.assertEqual(result[0].current_value, Decimal("0.00"))
-        self.assertEqual(result[0].amount, Decimal("100.00"))
+        self.assertEqual(result[0].target_value, Decimal("0.00"))
+        self.assertEqual(result[0].amount, Decimal("0.00"))
+
+    def test_explicit_ignored_class_is_removed_from_allocation_base(self):
+        result = calculate(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal("100"),
+            targets=[ClassTarget("stocks", Decimal(1)),
+                     ClassTarget("legacy", ignore=True)],
+            asset_classes={"VTI": "stocks", "OLD": "legacy"},
+            positions={
+                "VTI": Position("VTI", Decimal(1), Decimal("600")),
+                "OLD": Position("OLD", Decimal(1), Decimal("300")),
+            },
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].asset_class, "stocks")
+        self.assertEqual(result[0].target_value, Decimal("600.00"))
+        self.assertEqual(result[0].action, "HOLD")
 
     def test_fixed_dollar_target_overrides_weight(self):
         result = calculate(

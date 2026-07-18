@@ -3,12 +3,14 @@
   "target_cash": -2000,
   "minimum_trade": 5,
   "classes": [
-    {"name": "stocks", "weight": 0.80, "target_amount": null},
-    {"name": "bonds", "weight": 0.20, "target_amount": null}
+    {"name": "stocks", "weight": 0.80, "target_amount": null, "ignore": false},
+    {"name": "bonds", "weight": 0.20, "target_amount": null, "ignore": false},
+    {"name": "legacy", "ignore": true}
   ],
   "assets": [
     {"symbol": "VTI", "class": "stocks"},
     {"symbol": "VXUS", "class": "stocks"},
-    {"symbol": "BND", "class": "bonds"}
+    {"symbol": "BND", "class": "bonds"},
+    {"symbol": "OLD", "class": "legacy"}
   ]
 }

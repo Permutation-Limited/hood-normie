@@ -61,6 +61,7 @@ def main() -> int:
         weight=decimal(item["weight"]) if item.get("weight") is not None else None,
         target_amount=(decimal(item["target_amount"])
                        if item.get("target_amount") is not None else None),
+        ignore=bool(item.get("ignore", False)),
     ) for item in config["classes"]]
     asset_classes = {
         item["symbol"].upper(): item["class"] for item in config["assets"]
@@ -147,13 +148,13 @@ def main() -> int:
     )
     warning_stream = sys.stderr if args.json else sys.stdout
     if unclassified:
-        print("WARNING: Unclassified assets are excluded from current class balances:",
+        print("NOTICE: Unclassified assets are implicitly ignored in allocation calculations:",
               file=warning_stream)
         for position in unclassified:
             print(f"  - {position.symbol}: ${position.market_value:,.2f}", file=warning_stream)
         print(
-            "Class recommendations assume this value will be sold or reassigned. "
-            "Add each symbol to config.json assets for an accurate allocation.\n",
+            "Their value is removed from the allocation base and no trade is assumed. "
+            "Map a symbol to a non-ignored class if it should affect targets.\n",
             file=warning_stream,
         )
     if args.json:
@@ -168,9 +169,7 @@ def main() -> int:
             print(f"{r.action:<6} {r.asset_class:<12} "
                   f"${abs(r.amount):>11,.2f} "
                   f"${r.current_value:>11,.2f} ${r.target_value:>11,.2f}")
-        projected_cash = net_liquidation_value - sum(
-            (r.target_value for r in recommendations), Decimal(0)
-        )
+        projected_cash = target_cash
         print(f"\nProjected cash: ${projected_cash:,.2f}")
     return 0
 
