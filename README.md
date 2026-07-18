@@ -121,12 +121,18 @@ that one field, not a complete config file. Then run:
 
 ```sh
 bazel test //...
-bazel run //:rebalance
+bazel run //:rebalance -- --from-snapshot
 ```
 
-The default run reads `config.json` and `snapshot.json` and makes no network
-requests. Override them with `--config PATH` or `--snapshot PATH`. Add `--json`
-for machine-readable output.
+The default run fetches current data from Robinhood. To run offline using
+`snapshot.json`, pass `--from-snapshot`:
+
+```sh
+bazel run //:rebalance -- --from-snapshot
+```
+
+Override local paths with `--config PATH` or `--snapshot PATH`. Add `--json` for
+machine-readable output.
 
 Relative paths are resolved from the workspace directory where you invoked
 `bazel run`, not from Bazel's internal runfiles directory. Absolute paths work
@@ -159,7 +165,7 @@ to both `//:authenticate` and `//:rebalance`.
 After authentication:
 
 ```sh
-bazel run //:rebalance -- --live
+bazel run //:rebalance
 ```
 
 For live requests, account selection uses `--account` first, then
@@ -183,7 +189,7 @@ dropped when its quote is missing; the run stops with an explicit error instead.
 To inspect every MCP JSON-RPC request and complete JSON response:
 
 ```sh
-bazel run //:rebalance -- --live --verbose
+bazel run //:rebalance -- --verbose
 ```
 
 Verbose output goes to stderr, so `--json` stdout remains machine-readable. The
@@ -199,18 +205,17 @@ and quotes and atomically replace the default snapshot:
 
 ```sh
 bazel run //:rebalance -- \
-  --live \
   --save-snapshot
 ```
 
 The command both prints the current rebalance plan and writes normalized broker
-data to `snapshot.json`. Subsequent `bazel run //:rebalance` invocations use that
-saved data without contacting Robinhood.
+data to `snapshot.json`. Use `bazel run //:rebalance -- --from-snapshot` to read
+that saved data later without contacting Robinhood.
 
 To write another file, put its path after the option:
 
 ```sh
-bazel run //:rebalance -- --live --save-snapshot snapshots/2026-07-18.json \
+bazel run //:rebalance -- --save-snapshot snapshots/2026-07-18.json \
   --account 'AN_OPTIONAL_ONE_RUN_OVERRIDE'
 ```
 

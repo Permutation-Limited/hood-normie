@@ -27,11 +27,15 @@ def main() -> int:
                         help=f"target allocation JSON (default: {DEFAULT_CONFIG})")
     parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT,
                         help=f"offline broker snapshot JSON (default: {DEFAULT_SNAPSHOT})")
-    parser.add_argument("--live", action="store_true",
-                        help="fetch current data from Robinhood instead of reading --snapshot")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--from-snapshot", action="store_true",
+                      help="read offline data from --snapshot instead of Robinhood")
+    mode.add_argument("--live", action="store_false", dest="from_snapshot",
+                      help=argparse.SUPPRESS)
+    parser.set_defaults(from_snapshot=False)
     parser.add_argument("--save-snapshot", nargs="?", const=DEFAULT_SNAPSHOT,
                         metavar="PATH",
-                        help=f"with --live, save fetched data (default path: {DEFAULT_SNAPSHOT})")
+                        help=f"save live fetched data (default path: {DEFAULT_SNAPSHOT})")
     parser.add_argument("--account", help="Robinhood account number (required if ambiguous)")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
@@ -69,9 +73,9 @@ def main() -> int:
     if len(asset_classes) != len(config["assets"]):
         raise ValueError("asset symbols must be unique")
 
-    if args.save_snapshot and not args.live:
-        parser.error("--save-snapshot requires --live")
-    if args.live:
+    if args.save_snapshot and args.from_snapshot:
+        parser.error("--save-snapshot cannot be used with --from-snapshot")
+    if not args.from_snapshot:
         account_number = args.account or config.get("account_number")
         snapshot = fetch_snapshot(args.endpoint, account_number, list(asset_classes),
                                   args.token_file, verbose=args.verbose)
@@ -85,7 +89,7 @@ def main() -> int:
         except FileNotFoundError as error:
             raise SystemExit(
                 f"snapshot not found: {args.snapshot}; copy snapshot.example.json or run "
-                "with --live --save-snapshot"
+                "without --from-snapshot and use --save-snapshot"
             ) from error
 
     positions = {
@@ -97,7 +101,7 @@ def main() -> int:
     if "cash" not in snapshot:
         raise ValueError(
             "snapshot has no broker-reported cash value; refresh it with "
-            "--live --save-snapshot or add the Robinhood cash field"
+            "--save-snapshot or add the Robinhood cash field"
         )
     current_cash = decimal(snapshot["cash"])
     target_cash = decimal(config.get("target_cash", 0))
