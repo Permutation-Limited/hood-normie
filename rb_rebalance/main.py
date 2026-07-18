@@ -36,7 +36,8 @@ def main() -> int:
     parser.add_argument("--save-snapshot", nargs="?", const=DEFAULT_SNAPSHOT,
                         metavar="PATH",
                         help=f"save live fetched data (default path: {DEFAULT_SNAPSHOT})")
-    parser.add_argument("--account", help="Robinhood account number (required if ambiguous)")
+    parser.add_argument("--account", action="append",
+                        help="Robinhood account number; repeat for multiple accounts")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
                         help="OAuth token file created by //:authenticate")
@@ -72,12 +73,25 @@ def main() -> int:
     }
     if len(asset_classes) != len(config["assets"]):
         raise ValueError("asset symbols must be unique")
+    external_accounts = config.get("external_accounts", [])
+    external_names = [item["name"] for item in external_accounts]
+    if len(external_names) != len(set(external_names)):
+        raise ValueError("external account names must be unique")
+    external_symbols = {
+        item["symbol"].upper()
+        for account in external_accounts for item in account.get("assets", [])
+    }
+    configured_accounts = config.get("robinhood_account_numbers")
+    if configured_accounts is None:
+        configured_accounts = ([str(config["account_number"])]
+                               if config.get("account_number") else [])
+    account_numbers = args.account or [str(value) for value in configured_accounts]
 
     if args.save_snapshot and args.from_snapshot:
         parser.error("--save-snapshot cannot be used with --from-snapshot")
     if not args.from_snapshot:
-        account_number = args.account or config.get("account_number")
-        snapshot = fetch_snapshot(args.endpoint, account_number, list(asset_classes),
+        snapshot = fetch_snapshot(args.endpoint, account_numbers,
+                                  sorted(set(asset_classes) | external_symbols),
                                   args.token_file, verbose=args.verbose)
         if args.save_snapshot:
             save_snapshot(args.save_snapshot, snapshot)
@@ -92,18 +106,44 @@ def main() -> int:
                 "without --from-snapshot and use --save-snapshot"
             ) from error
 
-    positions = {
-        item["symbol"].upper(): Position(
-            item["symbol"].upper(), decimal(item["quantity"]), decimal(item["price"])
-        ) for item in snapshot["positions"]
-    }
-    net_liquidation_value = decimal(snapshot["net_liquidation_value"])
-    if "cash" not in snapshot:
-        raise ValueError(
-            "snapshot has no broker-reported cash value; refresh it with "
-            "--save-snapshot or add the Robinhood cash field"
+    robinhood_snapshots = snapshot.get("accounts")
+    if robinhood_snapshots is None:
+        # Backward compatibility for snapshots written before multi-account support.
+        robinhood_snapshots = [snapshot]
+    account_positions: list[tuple[str, dict[str, Position]]] = []
+    net_liquidation_value = Decimal(0)
+    current_cash = Decimal(0)
+    for index, account_snapshot in enumerate(robinhood_snapshots, start=1):
+        if "cash" not in account_snapshot:
+            raise ValueError(
+                "snapshot account has no broker-reported cash value; refresh it with "
+                "--save-snapshot or add the Robinhood cash field"
+            )
+        label = str(account_snapshot.get("account_number") or f"Robinhood {index}")
+        parsed = _parse_positions(account_snapshot.get("positions", []))
+        account_positions.append((f"ROBINHOOD ACCOUNT {label}", parsed))
+        net_liquidation_value += decimal(account_snapshot["net_liquidation_value"])
+        current_cash += decimal(account_snapshot["cash"])
+
+    prices = {key.upper(): decimal(value) for key, value in snapshot.get("prices", {}).items()}
+    for external in external_accounts:
+        parsed: dict[str, Position] = {}
+        for item in external.get("assets", []):
+            symbol = item["symbol"].upper()
+            if symbol in parsed:
+                raise ValueError(f"duplicate symbol {symbol} in external account {external['name']}")
+            price = prices.get(symbol)
+            if price is None:
+                raise ValueError(
+                    f"missing quote for external asset {symbol}; refresh the snapshot or run live"
+                )
+            parsed[symbol] = Position(symbol, decimal(item["quantity"]), price)
+        account_positions.append((f"EXTERNAL ACCOUNT {external['name']}", parsed))
+        net_liquidation_value += sum(
+            (position.market_value for position in parsed.values()), Decimal(0)
         )
-    current_cash = decimal(snapshot["cash"])
+
+    positions = _aggregate_positions(account_positions)
     target_cash = decimal(config.get("target_cash", 0))
     minimum_trade = decimal(config.get("minimum_trade", 0))
     recommendations = calculate(
@@ -121,31 +161,8 @@ def main() -> int:
     )
     output_recommendations = recommendations + [cash_recommendation]
     if not args.json:
-        account_label = snapshot.get("account_number") or config.get("account_number")
-        heading = "CURRENT ASSETS"
-        if account_label:
-            heading += f" — ACCOUNT {account_label}"
-        print(heading)
-        print("SYMBOL CLASS              QUANTITY        PRICE        VALUE")
-        if positions:
-            for position in sorted(positions.values(), key=lambda item: item.symbol):
-                asset_class = asset_classes.get(position.symbol, "UNCLASSIFIED")
-                print(
-                    f"{position.symbol:<6} {asset_class:<14} "
-                    f"{position.quantity:>12,f} ${position.price:>11,.2f} "
-                    f"${position.market_value:>11,.2f}"
-                )
-            total_assets = sum(
-                (position.market_value for position in positions.values()), Decimal(0)
-            )
-            print(f"{'TOTAL':<33} {'':>0} ${total_assets:>11,.2f}\n")
-        else:
-            print("(no equity positions returned)\n")
-            print(
-                "WARNING: Robinhood returned no equity positions for this account. "
-                "Verify account_number in config.json; Robinhood may list both an "
-                "empty Agentic account and a funded brokerage account.\n"
-            )
+        for label, held_positions in account_positions:
+            _print_asset_table(label, held_positions, asset_classes)
     unclassified = sorted(
         (position for symbol, position in positions.items() if symbol not in asset_classes),
         key=lambda position: position.symbol,
@@ -178,22 +195,32 @@ def main() -> int:
     return 0
 
 
-def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
+def fetch_snapshot(endpoint: str, accounts: list[str], symbols: list[str],
                    token_file: str, verbose: bool = False) -> dict[str, Any]:
     token = os.environ.get("ROBINHOOD_MCP_TOKEN") or load_access_token(token_file)
     client = RobinhoodMcpClient(endpoint, token, verbose=verbose)
     client.connect()
-    accounts = client.call_tool("get_accounts")
-    account_number = account or select_account(accounts)
-    arguments = {"account_number": account_number}
-    portfolio = client.call_tool("get_portfolio", arguments)
-    raw_positions = client.call_tool("get_equity_positions", arguments)
-    held_symbols = _position_symbols(raw_positions)
-    quote_symbols = sorted(set(symbols) | set(held_symbols))
+    account_numbers = list(accounts)
+    if not account_numbers:
+        account_numbers = [select_account(client.call_tool("get_accounts"))]
+    raw_accounts = []
+    held_symbols: set[str] = set()
+    for account_number in account_numbers:
+        arguments = {"account_number": account_number}
+        portfolio = client.call_tool("get_portfolio", arguments)
+        raw_positions = client.call_tool("get_equity_positions", arguments)
+        raw_accounts.append((account_number, portfolio, raw_positions))
+        held_symbols.update(_position_symbols(raw_positions))
+    quote_symbols = sorted(set(symbols) | held_symbols)
     raw_quotes = client.call_tool("get_equity_quotes", {"symbols": quote_symbols})
-    snapshot = normalize_snapshot(portfolio, raw_positions, raw_quotes)
-    snapshot["account_number"] = account_number
-    return snapshot
+    normalized_accounts = []
+    all_prices = _normalize_quotes(raw_quotes)
+    for account_number, portfolio, raw_positions in raw_accounts:
+        normalized = normalize_snapshot(portfolio, raw_positions, raw_quotes)
+        normalized.pop("prices", None)
+        normalized["account_number"] = account_number
+        normalized_accounts.append(normalized)
+    return {"accounts": normalized_accounts, "prices": all_prices}
 
 
 def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:
@@ -214,6 +241,57 @@ def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def _parse_positions(items: list[dict[str, Any]]) -> dict[str, Position]:
+    result: dict[str, Position] = {}
+    for item in items:
+        symbol = item["symbol"].upper()
+        position = Position(symbol, decimal(item["quantity"]), decimal(item["price"]))
+        if symbol in result:
+            existing = result[symbol]
+            quantity = existing.quantity + position.quantity
+            value = existing.market_value + position.market_value
+            price = value / quantity if quantity else position.price
+            position = Position(symbol, quantity, price)
+        result[symbol] = position
+    return result
+
+
+def _aggregate_positions(
+    accounts: list[tuple[str, dict[str, Position]]]
+) -> dict[str, Position]:
+    items = [
+        {"symbol": position.symbol, "quantity": position.quantity, "price": position.price}
+        for _, positions in accounts for position in positions.values()
+    ]
+    return _parse_positions(items)
+
+
+def _print_asset_table(
+    label: str, positions: dict[str, Position], asset_classes: dict[str, str]
+) -> None:
+    print(f"CURRENT ASSETS — {label}")
+    print("SYMBOL CLASS              QUANTITY        PRICE        VALUE")
+    if positions:
+        for position in sorted(positions.values(), key=lambda item: item.symbol):
+            asset_class = asset_classes.get(position.symbol, "UNCLASSIFIED")
+            print(
+                f"{position.symbol:<6} {asset_class:<14} "
+                f"{position.quantity:>12,f} ${position.price:>11,.2f} "
+                f"${position.market_value:>11,.2f}"
+            )
+        total_assets = sum(
+            (position.market_value for position in positions.values()), Decimal(0)
+        )
+        print(f"{'TOTAL':<33} ${total_assets:>11,.2f}\n")
+    else:
+        print("(no positions)\n")
+        if label.startswith("ROBINHOOD"):
+            print(
+                "WARNING: Robinhood returned no equity positions for this account. "
+                "Verify its number in config.json.\n"
+            )
 
 
 def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str, Any]:
@@ -243,12 +321,7 @@ def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str,
         "price", "mark_price", "markPrice", "last_trade_price", "lastTradePrice",
         "last_price", "lastPrice", "current_price", "currentPrice",
     )
-    quote_map = {}
-    for quote in _find_records_with_fields(quotes, ("symbol",), price_fields):
-        symbol = _first(quote, "symbol")
-        price = _money_value(_first(quote, *price_fields))
-        if symbol and price is not None:
-            quote_map[str(symbol).upper()] = price
+    quote_map = _normalize_quotes(quotes)
     normalized_positions = []
     missing_prices = []
     for position in _position_records(positions):
@@ -271,6 +344,20 @@ def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str,
         )
     return {"net_liquidation_value": net_value, "cash": cash,
             "positions": normalized_positions, "prices": quote_map}
+
+
+def _normalize_quotes(quotes: Any) -> dict[str, Any]:
+    price_fields = (
+        "price", "mark_price", "markPrice", "last_trade_price", "lastTradePrice",
+        "last_price", "lastPrice", "current_price", "currentPrice",
+    )
+    quote_map = {}
+    for quote in _find_records_with_fields(quotes, ("symbol",), price_fields):
+        symbol = _first(quote, "symbol")
+        price = _money_value(_first(quote, *price_fields))
+        if symbol and price is not None:
+            quote_map[str(symbol).upper()] = price
+    return quote_map
 
 
 def _records(payload: Any, *keys: str) -> list[dict[str, Any]]:

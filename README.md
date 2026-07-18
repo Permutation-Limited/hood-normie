@@ -28,7 +28,7 @@ are aggregated before calculating the recommendation.
 
 ```json
 {
-  "account_number": null,
+  "robinhood_account_numbers": ["ACCOUNT_ONE", "ACCOUNT_TWO"],
   "target_cash": -2000,
   "minimum_trade": 5,
   "classes": [
@@ -41,6 +41,14 @@ are aggregated before calculating the recommendation.
     {"symbol": "VXUS", "class": "stocks"},
     {"symbol": "BND", "class": "bonds"},
     {"symbol": "OLD", "class": "legacy"}
+  ],
+  "external_accounts": [
+    {
+      "name": "401(k)",
+      "assets": [
+        {"symbol": "VTI", "quantity": 10}
+      ]
+    }
   ]
 }
 ```
@@ -95,9 +103,22 @@ weight; a fixed-dollar class may omit its weight entirely.
 
 Before recommendations, human-readable output includes a current-assets table
 with each symbol's mapped class, quantity, price, and market value. The heading
-also shows the account number used for the request. If Robinhood returns no
-positions, verify that `account_number` identifies the funded brokerage account
-rather than an empty Agentic account.
+also shows the Robinhood account number or external account name. Each account
+has its own table, while the final action table uses their combined holdings.
+
+### Multiple and external accounts
+
+Put any number of brokerage numbers in `robinhood_account_numbers`. The legacy
+singular `account_number` remains supported when the plural field is absent. On
+the command line, repeat `--account NUMBER` to override the configured list for
+one run.
+
+`external_accounts` contains named accounts whose positions are not retrieved
+from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
+`quantity`. The program obtains current prices from Robinhood quotes during live
+runs or from the snapshot's `prices` map offline. External market value is added
+to composite net liquidation value, but external accounts contribute no cash.
+Symbols use the same top-level `assets` mapping as Robinhood holdings.
 
 ## Run offline
 
@@ -110,13 +131,13 @@ cp snapshot.example.json snapshot.json
 
 `config.json` and `snapshot.json` are ignored by Git, while the example files
 remain checked in as documentation. Edit `config.json` with your actual target
-allocation. You may also store the Robinhood account number in this ignored file:
+allocation. You may also store Robinhood account numbers in this ignored file:
 
 ```json
-"account_number": "YOUR_ACCOUNT_NUMBER"
+"robinhood_account_numbers": ["ACCOUNT_ONE", "ACCOUNT_TWO"]
 ```
 
-Replace the existing `"account_number": null` line; the snippet above is only
+Replace the existing `robinhood_account_numbers` line; the snippet above is only
 that one field, not a complete config file. Then run:
 
 ```sh
@@ -168,10 +189,10 @@ After authentication:
 bazel run //:rebalance
 ```
 
-For live requests, account selection uses `--account` first, then
-`account_number` from `config.json`, and finally automatic selection when
-Robinhood returns exactly one recognizable account. This makes `--account`
-useful as a one-run override without editing the config.
+For live requests, account selection uses repeated `--account` arguments first,
+then `robinhood_account_numbers`, then the legacy singular `account_number`, and
+finally automatic selection when Robinhood returns exactly one recognizable
+account.
 
 The rebalancer reads the saved token and refreshes it automatically when needed.
 `ROBINHOOD_MCP_TOKEN` is still supported as a temporary override, but storing a

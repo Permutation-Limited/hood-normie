@@ -1,5 +1,5 @@
 {
-  "account_number": null,
+  "robinhood_account_numbers": [],
   "target_cash": -2000,
   "minimum_trade": 5,
   "classes": [
@@ -12,5 +12,13 @@
     {"symbol": "VXUS", "class": "stocks"},
     {"symbol": "BND", "class": "bonds"},
     {"symbol": "OLD", "class": "legacy"}
+  ],
+  "external_accounts": [
+    {
+      "name": "401(k)",
+      "assets": [
+        {"symbol": "VTI", "quantity": 10}
+      ]
+    }
   ]
 }
