@@ -84,15 +84,11 @@ def calculate(
     unknown_classes = sorted(set(asset_classes.values()) - class_names)
     if unknown_classes:
         raise ValueError(f"assets reference undefined classes: {', '.join(unknown_classes)}")
-    unmapped = sorted(symbol for symbol in positions if symbol not in asset_classes)
-    if unmapped:
-        raise ValueError(
-            "held symbols are missing from assets config: " + ", ".join(unmapped)
-        )
-
     current_by_class = {name: Decimal(0) for name in class_names}
     for symbol, position in positions.items():
-        current_by_class[asset_classes[symbol]] += position.market_value
+        asset_class = asset_classes.get(symbol)
+        if asset_class is not None:
+            current_by_class[asset_class] += position.market_value
 
     recommendations: list[Recommendation] = []
     for target in checked_targets:

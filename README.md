@@ -45,8 +45,16 @@ are aggregated before calculating the recommendation.
 
 The output says how many dollars of each class to buy or sell. It deliberately
 does not divide that amount among `VTI`, `VXUS`, or other symbols. Every held
-equity/ETF symbol must appear in `assets`; an unmapped holding causes an error
-instead of silently producing an incorrect allocation.
+equity/ETF symbol should appear in `assets`. Unmapped holdings produce a warning
+before the recommendations and are excluded from current class balances. The
+result therefore assumes their value will be sold or reassigned; classify them
+before relying on the recommendations.
+
+Before recommendations, human-readable output includes a current-assets table
+with each symbol's mapped class, quantity, price, and market value. The heading
+also shows the account number used for the request. If Robinhood returns no
+positions, verify that `account_number` identifies the funded brokerage account
+rather than an empty Agentic account.
 
 ## Run offline
 

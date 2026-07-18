@@ -96,6 +96,47 @@ def main() -> int:
         positions=positions,
         minimum_trade=decimal(config.get("minimum_trade", 0)),
     )
+    if not args.json:
+        account_label = snapshot.get("account_number") or config.get("account_number")
+        heading = "CURRENT ASSETS"
+        if account_label:
+            heading += f" — ACCOUNT {account_label}"
+        print(heading)
+        print("SYMBOL CLASS              QUANTITY        PRICE        VALUE")
+        if positions:
+            for position in sorted(positions.values(), key=lambda item: item.symbol):
+                asset_class = asset_classes.get(position.symbol, "UNCLASSIFIED")
+                print(
+                    f"{position.symbol:<6} {asset_class:<14} "
+                    f"{position.quantity:>12,f} ${position.price:>11,.2f} "
+                    f"${position.market_value:>11,.2f}"
+                )
+            total_assets = sum(
+                (position.market_value for position in positions.values()), Decimal(0)
+            )
+            print(f"{'TOTAL':<33} {'':>0} ${total_assets:>11,.2f}\n")
+        else:
+            print("(no equity positions returned)\n")
+            print(
+                "WARNING: Robinhood returned no equity positions for this account. "
+                "Verify account_number in config.json; Robinhood may list both an "
+                "empty Agentic account and a funded brokerage account.\n"
+            )
+    unclassified = sorted(
+        (position for symbol, position in positions.items() if symbol not in asset_classes),
+        key=lambda position: position.symbol,
+    )
+    warning_stream = sys.stderr if args.json else sys.stdout
+    if unclassified:
+        print("WARNING: Unclassified assets are excluded from current class balances:",
+              file=warning_stream)
+        for position in unclassified:
+            print(f"  - {position.symbol}: ${position.market_value:,.2f}", file=warning_stream)
+        print(
+            "Class recommendations assume this value will be sold or reassigned. "
+            "Add each symbol to config.json assets for an accurate allocation.\n",
+            file=warning_stream,
+        )
     if args.json:
         print(json.dumps([{
             "asset_class": r.asset_class, "action": r.action,
@@ -126,7 +167,9 @@ def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
     portfolio = client.call_tool("get_portfolio", arguments)
     raw_positions = client.call_tool("get_equity_positions", arguments)
     raw_quotes = client.call_tool("get_equity_quotes", {"symbols": symbols})
-    return normalize_snapshot(portfolio, raw_positions, raw_quotes)
+    snapshot = normalize_snapshot(portfolio, raw_positions, raw_quotes)
+    snapshot["account_number"] = account_number
+    return snapshot
 
 
 def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:

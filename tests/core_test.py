@@ -64,13 +64,14 @@ class CalculateTest(unittest.TestCase):
                          {"bonds": Decimal("500.00"), "stocks": Decimal("500.00")})
         self.assertTrue(all(r.action == "HOLD" for r in result))
 
-    def test_rejects_unmapped_held_symbol(self):
-        with self.assertRaisesRegex(ValueError, "missing from assets config: TSLA"):
-            calculate(
-                net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
-                targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
-                positions={"TSLA": Position("TSLA", Decimal(1), Decimal("100"))},
-            )
+    def test_excludes_unmapped_held_symbol_from_class_balance(self):
+        result = calculate(
+            net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
+            targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
+            positions={"TSLA": Position("TSLA", Decimal(1), Decimal("100"))},
+        )
+        self.assertEqual(result[0].current_value, Decimal("0.00"))
+        self.assertEqual(result[0].amount, Decimal("100.00"))
 
 
 class WorkspacePathTest(unittest.TestCase):
