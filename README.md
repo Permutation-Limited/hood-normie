@@ -59,6 +59,8 @@ trade in them. Ignored classes and the aggregate implicit `unclassified` class
 appear in the final table with a blank action, identical current and target
 values, and a `$0.00` amount. Ignored classes cannot have `target_amount`. Their
 assets also remain visible individually in the current-assets table.
+Recommendation rows are ordered with active classes first, followed by configured
+ignored classes, the implicit `unclassified` class, and finally `cash`.
 
 The active allocation base is:
 

@@ -164,7 +164,14 @@ def calculate(
             amount=Decimal(0).quantize(CENT),
             ignored=True,
         ))
-    return sorted(recommendations, key=lambda item: item.asset_class)
+    return sorted(
+        recommendations,
+        key=lambda item: (
+            item.ignored,
+            item.asset_class == "unclassified",
+            item.asset_class,
+        ),
+    )
 
 
 def calculate_cash(

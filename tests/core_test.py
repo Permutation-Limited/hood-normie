@@ -104,6 +104,26 @@ class CalculateTest(unittest.TestCase):
         self.assertEqual(by_class["unclassified"].amount, Decimal("0.00"))
         self.assertEqual(by_class["unclassified"].action, "")
 
+    def test_ignored_and_unclassified_rows_are_last(self):
+        result = calculate(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            targets=[
+                ClassTarget("stocks", Decimal(1)),
+                ClassTarget("legacy_z", ignore=True),
+                ClassTarget("legacy_a", ignore=True),
+            ],
+            asset_classes={"VTI": "stocks", "OLD": "legacy_z"},
+            positions={
+                "VTI": Position("VTI", Decimal(1), Decimal("600")),
+                "OLD": Position("OLD", Decimal(1), Decimal("200")),
+                "OTHER": Position("OTHER", Decimal(1), Decimal("200")),
+            },
+        )
+        self.assertEqual(
+            [item.asset_class for item in result],
+            ["stocks", "legacy_a", "legacy_z", "unclassified"],
+        )
+
     def test_fixed_dollar_target_overrides_weight(self):
         result = calculate(
             net_liquidation_value=Decimal("1000"), target_cash=Decimal("100"),
