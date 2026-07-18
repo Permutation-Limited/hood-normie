@@ -2,6 +2,7 @@ from decimal import Decimal
 import unittest
 
 from rb_rebalance.core import Position, Target, calculate
+from rb_rebalance.paths import workspace_path
 
 
 class CalculateTest(unittest.TestCase):
@@ -46,6 +47,19 @@ class CalculateTest(unittest.TestCase):
                       positions={}, prices={"VTI": Decimal(1)})
 
 
+class WorkspacePathTest(unittest.TestCase):
+    def test_relative_path_uses_bazel_workspace(self):
+        self.assertEqual(
+            workspace_path("config.json", {"BUILD_WORKSPACE_DIRECTORY": "/repo"}),
+            "/repo/config.json",
+        )
+
+    def test_absolute_path_is_unchanged(self):
+        self.assertEqual(workspace_path("/tmp/config.json", {}), "/tmp/config.json")
+
+    def test_direct_execution_keeps_relative_path(self):
+        self.assertEqual(workspace_path("config.json", {}), "config.json")
+
+
 if __name__ == "__main__":
     unittest.main()
-

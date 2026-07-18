@@ -11,6 +11,7 @@ from rb_rebalance.oauth import (
     DEFAULT_ENDPOINT, DEFAULT_TOKEN_FILE, OAuthError, authorization_url,
     discover, exchange_code, pkce_pair, register_client, save_token,
 )
+from rb_rebalance.paths import workspace_path
 
 
 class CallbackHandler(BaseHTTPRequestHandler):
@@ -42,6 +43,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=300,
                         help="seconds to wait for browser authorization")
     args = parser.parse_args()
+    args.token_file = workspace_path(args.token_file)
 
     server = HTTPServer(("127.0.0.1", 0), CallbackHandler)
     redirect_uri = f"http://127.0.0.1:{server.server_port}/callback"
@@ -90,4 +92,3 @@ if __name__ == "__main__":
     except (OAuthError, KeyError) as error:
         print(f"error: {error}")
         raise SystemExit(1)
-

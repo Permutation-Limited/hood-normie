@@ -44,6 +44,10 @@ requests. Override them with `--config PATH` or `--snapshot PATH`. Add `--json`
 for machine-readable output. Set `liquidate_unconfigured` to true only if
 holdings omitted from the targets should appear as full sells.
 
+Relative paths are resolved from the workspace directory where you invoked
+`bazel run`, not from Bazel's internal runfiles directory. Absolute paths work
+unchanged.
+
 ## Authenticate with Robinhood
 
 Robinhood's endpoint uses OAuth 2.1 with browser approval. Run the authentication

@@ -9,6 +9,7 @@ py_library(
         "rb_rebalance/core.py",
         "rb_rebalance/mcp.py",
         "rb_rebalance/oauth.py",
+        "rb_rebalance/paths.py",
     ],
 )
 

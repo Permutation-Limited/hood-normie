@@ -12,6 +12,7 @@ from typing import Any
 from rb_rebalance.core import Position, Target, calculate, decimal
 from rb_rebalance.mcp import RobinhoodMcpClient
 from rb_rebalance.oauth import DEFAULT_TOKEN_FILE, OAuthError, load_access_token
+from rb_rebalance.paths import workspace_path
 
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
@@ -36,6 +37,12 @@ def main() -> int:
                         help="OAuth token file created by //:authenticate")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     args = parser.parse_args()
+
+    args.config = workspace_path(args.config)
+    args.snapshot = workspace_path(args.snapshot)
+    args.token_file = workspace_path(args.token_file)
+    if args.save_snapshot:
+        args.save_snapshot = workspace_path(args.save_snapshot)
 
     with open(args.config, encoding="utf-8") as stream:
         config = json.load(stream)
