@@ -1,0 +1,10 @@
+{
+  "net_liquidation_value": 10000,
+  "positions": [
+    {"symbol": "VTI", "quantity": 20, "price": 250},
+    {"symbol": "VXUS", "quantity": 30, "price": 60},
+    {"symbol": "BND", "quantity": 40, "price": 75}
+  ],
+  "prices": {"VTI": 250, "VXUS": 60, "BND": 75}
+}
+

@@ -1,0 +1,25 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "rebalance_lib",
+    srcs = [
+        "rb_rebalance/__init__.py",
+        "rb_rebalance/core.py",
+        "rb_rebalance/mcp.py",
+    ],
+)
+
+py_binary(
+    name = "rebalance",
+    srcs = ["rb_rebalance/main.py"],
+    main = "rb_rebalance/main.py",
+    deps = [":rebalance_lib"],
+)
+
+py_test(
+    name = "core_test",
+    srcs = ["tests/core_test.py"],
+    deps = [":rebalance_lib"],
+)
