@@ -3,6 +3,7 @@ import unittest
 
 from rb_rebalance.core import Position, Target, calculate
 from rb_rebalance.paths import workspace_path
+from rb_rebalance.accounts import select_account
 
 
 class CalculateTest(unittest.TestCase):
@@ -59,6 +60,34 @@ class WorkspacePathTest(unittest.TestCase):
 
     def test_direct_execution_keeps_relative_path(self):
         self.assertEqual(workspace_path("config.json", {}), "config.json")
+
+
+class AccountSelectionTest(unittest.TestCase):
+    def test_selects_only_numbered_account_through_nested_wrapper(self):
+        payload = {"accounts": {"results": [
+            {"displayName": "Retirement", "accountNumber": "ABC123"},
+        ]}}
+        self.assertEqual(select_account(payload), "ABC123")
+
+    def test_lists_names_and_numbers_when_ambiguous(self):
+        payload = {"accounts": [
+            {"nickname": "Individual", "account_number": "111"},
+            {"accountType": "Agentic", "number": "222"},
+        ]}
+        with self.assertRaises(SystemExit) as caught:
+            select_account(payload)
+        message = str(caught.exception)
+        self.assertIn("Individual: 111", message)
+        self.assertIn("Agentic: 222", message)
+        self.assertIn("--account NUMBER", message)
+
+    def test_missing_number_lists_account_fields(self):
+        payload = {"data": {"accounts": [{"name": "Brokerage", "account_id": "id-1"}]}}
+        with self.assertRaises(SystemExit) as caught:
+            select_account(payload)
+        message = str(caught.exception)
+        self.assertIn("Brokerage: (number unavailable)", message)
+        self.assertIn("account_id", message)
 
 
 if __name__ == "__main__":

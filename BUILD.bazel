@@ -6,6 +6,7 @@ py_library(
     name = "rebalance_lib",
     srcs = [
         "rb_rebalance/__init__.py",
+        "rb_rebalance/accounts.py",
         "rb_rebalance/core.py",
         "rb_rebalance/mcp.py",
         "rb_rebalance/oauth.py",

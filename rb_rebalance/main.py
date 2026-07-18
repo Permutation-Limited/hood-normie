@@ -9,6 +9,7 @@ import sys
 import tempfile
 from typing import Any
 
+from rb_rebalance.accounts import select_account
 from rb_rebalance.core import Position, Target, calculate, decimal
 from rb_rebalance.mcp import RobinhoodMcpClient
 from rb_rebalance.oauth import DEFAULT_TOKEN_FILE, OAuthError, load_access_token
@@ -111,7 +112,7 @@ def fetch_snapshot(endpoint: str, account: str | None, symbols: list[str],
     client = RobinhoodMcpClient(endpoint, token)
     client.connect()
     accounts = client.call_tool("get_accounts")
-    account_number = account or _select_account(accounts)
+    account_number = account or select_account(accounts)
     arguments = {"account_number": account_number}
     portfolio = client.call_tool("get_portfolio", arguments)
     raw_positions = client.call_tool("get_equity_positions", arguments)
@@ -137,16 +138,6 @@ def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:
         except FileNotFoundError:
             pass
         raise
-
-
-def _select_account(payload: Any) -> str:
-    accounts = _records(payload, "accounts")
-    if len(accounts) != 1:
-        raise SystemExit("pass --account because Robinhood returned zero or multiple accounts")
-    value = _first(accounts[0], "account_number", "accountNumber", "number")
-    if value is None:
-        raise SystemExit("could not find an account number in get_accounts response")
-    return str(value)
 
 
 def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str, Any]:
