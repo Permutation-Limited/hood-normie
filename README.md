@@ -55,8 +55,10 @@ and produce a notice before the recommendations.
 Set `"ignore": true` on a class to leave its assets entirely outside allocation
 calculations. Ignored and unclassified asset values are subtracted from the
 allocation base and excluded from active class balances; the program assumes no
-trade in them. Ignored classes do not produce recommendation rows and cannot have
-`target_amount`. Their assets remain visible in the current-assets table.
+trade in them. Ignored classes and the aggregate implicit `unclassified` class
+appear in the final table with a blank action, identical current and target
+values, and a `$0.00` amount. Ignored classes cannot have `target_amount`. Their
+assets also remain visible individually in the current-assets table.
 
 The active allocation base is:
 

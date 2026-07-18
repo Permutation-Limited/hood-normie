@@ -85,10 +85,24 @@ class CalculateTest(unittest.TestCase):
                 "OLD": Position("OLD", Decimal(1), Decimal("300")),
             },
         )
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].asset_class, "stocks")
-        self.assertEqual(result[0].target_value, Decimal("600.00"))
-        self.assertEqual(result[0].action, "HOLD")
+        by_class = {item.asset_class: item for item in result}
+        self.assertEqual(by_class["stocks"].target_value, Decimal("600.00"))
+        self.assertEqual(by_class["stocks"].action, "HOLD")
+        self.assertEqual(by_class["legacy"].current_value, Decimal("300.00"))
+        self.assertEqual(by_class["legacy"].target_value, Decimal("300.00"))
+        self.assertEqual(by_class["legacy"].action, "")
+
+    def test_unclassified_assets_get_informational_row(self):
+        result = calculate(
+            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
+            positions={"OTHER": Position("OTHER", Decimal(2), Decimal("100"))},
+        )
+        by_class = {item.asset_class: item for item in result}
+        self.assertEqual(by_class["unclassified"].current_value, Decimal("200.00"))
+        self.assertEqual(by_class["unclassified"].target_value, Decimal("200.00"))
+        self.assertEqual(by_class["unclassified"].amount, Decimal("0.00"))
+        self.assertEqual(by_class["unclassified"].action, "")
 
     def test_fixed_dollar_target_overrides_weight(self):
         result = calculate(

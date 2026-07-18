@@ -38,9 +38,12 @@ class Recommendation:
     current_value: Decimal
     target_value: Decimal
     amount: Decimal
+    ignored: bool = False
 
     @property
     def action(self) -> str:
+        if self.ignored:
+            return ""
         if self.amount > 0:
             return "BUY"
         if self.amount < 0:
@@ -129,15 +132,22 @@ def calculate(
     unknown_classes = sorted(set(asset_classes.values()) - class_names)
     if unknown_classes:
         raise ValueError(f"assets reference undefined classes: {', '.join(unknown_classes)}")
-    current_by_class = {target.name: Decimal(0) for target in checked_targets if not target.ignore}
+    current_by_class = {target.name: Decimal(0) for target in checked_targets}
+    unclassified_value = Decimal(0)
     for symbol, position in positions.items():
         asset_class = asset_classes.get(symbol)
-        if asset_class is not None and asset_class not in ignored_classes:
+        if asset_class is not None:
             current_by_class[asset_class] += position.market_value
+        else:
+            unclassified_value += position.market_value
 
     recommendations: list[Recommendation] = []
     for target in checked_targets:
         if target.ignore:
+            current = current_by_class[target.name]
+            recommendations.append(_recommendation(
+                target, current, current, Decimal(0), ignored=True
+            ))
             continue
         current = current_by_class[target.name]
         desired = (target.target_amount if target.target_amount is not None else
@@ -146,6 +156,14 @@ def calculate(
         if abs(amount) < minimum_trade:
             amount = Decimal(0)
         recommendations.append(_recommendation(target, current, desired, amount))
+    if unclassified_value != 0:
+        recommendations.append(Recommendation(
+            asset_class="unclassified",
+            current_value=unclassified_value.quantize(CENT, rounding=ROUND_HALF_UP),
+            target_value=unclassified_value.quantize(CENT, rounding=ROUND_HALF_UP),
+            amount=Decimal(0).quantize(CENT),
+            ignored=True,
+        ))
     return sorted(recommendations, key=lambda item: item.asset_class)
 
 
@@ -170,6 +188,7 @@ def _recommendation(
     current: Decimal,
     desired: Decimal,
     amount: Decimal,
+    ignored: bool = False,
 ) -> Recommendation:
     rounded_amount = amount.quantize(CENT, rounding=ROUND_HALF_UP)
     return Recommendation(
@@ -177,4 +196,5 @@ def _recommendation(
         current_value=current.quantize(CENT, rounding=ROUND_HALF_UP),
         target_value=desired.quantize(CENT, rounding=ROUND_HALF_UP),
         amount=rounded_amount,
+        ignored=ignored,
     )
