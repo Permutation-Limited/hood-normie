@@ -45,6 +45,7 @@ are aggregated before calculating the recommendation.
   "external_accounts": [
     {
       "name": "401(k)",
+      "cash": 500,
       "assets": [
         {"symbol": "VTI", "quantity": 10}
       ]
@@ -115,10 +116,12 @@ one run.
 
 `external_accounts` contains named accounts whose positions are not retrieved
 from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
-`quantity`. The program obtains current prices from Robinhood quotes during live
-runs or from the snapshot's `prices` map offline. External market value is added
-to composite net liquidation value, but external accounts contribute no cash.
-Symbols use the same top-level `assets` mapping as Robinhood holdings.
+`quantity`. An optional `cash` field defaults to zero. The program obtains current
+prices from Robinhood quotes during live runs or from the snapshot's `prices` map
+offline. External asset value and cash are added to composite net liquidation
+value, and external cash is included in composite current cash. Symbols use the
+same top-level `assets` mapping as Robinhood holdings. Each account table shows
+its cash and total value.
 
 ## Run offline
 

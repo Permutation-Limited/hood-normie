@@ -110,7 +110,7 @@ def main() -> int:
     if robinhood_snapshots is None:
         # Backward compatibility for snapshots written before multi-account support.
         robinhood_snapshots = [snapshot]
-    account_positions: list[tuple[str, dict[str, Position]]] = []
+    account_positions: list[tuple[str, dict[str, Position], Decimal]] = []
     net_liquidation_value = Decimal(0)
     current_cash = Decimal(0)
     for index, account_snapshot in enumerate(robinhood_snapshots, start=1):
@@ -121,13 +121,15 @@ def main() -> int:
             )
         label = str(account_snapshot.get("account_number") or f"Robinhood {index}")
         parsed = _parse_positions(account_snapshot.get("positions", []))
-        account_positions.append((f"ROBINHOOD ACCOUNT {label}", parsed))
+        account_cash = decimal(account_snapshot["cash"])
+        account_positions.append((f"ROBINHOOD ACCOUNT {label}", parsed, account_cash))
         net_liquidation_value += decimal(account_snapshot["net_liquidation_value"])
-        current_cash += decimal(account_snapshot["cash"])
+        current_cash += account_cash
 
     prices = {key.upper(): decimal(value) for key, value in snapshot.get("prices", {}).items()}
     for external in external_accounts:
         parsed: dict[str, Position] = {}
+        external_cash = decimal(external.get("cash", 0))
         for item in external.get("assets", []):
             symbol = item["symbol"].upper()
             if symbol in parsed:
@@ -138,10 +140,13 @@ def main() -> int:
                     f"missing quote for external asset {symbol}; refresh the snapshot or run live"
                 )
             parsed[symbol] = Position(symbol, decimal(item["quantity"]), price)
-        account_positions.append((f"EXTERNAL ACCOUNT {external['name']}", parsed))
+        account_positions.append(
+            (f"EXTERNAL ACCOUNT {external['name']}", parsed, external_cash)
+        )
         net_liquidation_value += sum(
             (position.market_value for position in parsed.values()), Decimal(0)
-        )
+        ) + external_cash
+        current_cash += external_cash
 
     positions = _aggregate_positions(account_positions)
     target_cash = decimal(config.get("target_cash", 0))
@@ -161,8 +166,8 @@ def main() -> int:
     )
     output_recommendations = recommendations + [cash_recommendation]
     if not args.json:
-        for label, held_positions in account_positions:
-            _print_asset_table(label, held_positions, asset_classes)
+        for label, held_positions, account_cash in account_positions:
+            _print_asset_table(label, held_positions, account_cash, asset_classes)
     unclassified = sorted(
         (position for symbol, position in positions.items() if symbol not in asset_classes),
         key=lambda position: position.symbol,
@@ -257,17 +262,18 @@ def _parse_positions(items: list[dict[str, Any]]) -> dict[str, Position]:
 
 
 def _aggregate_positions(
-    accounts: list[tuple[str, dict[str, Position]]]
+    accounts: list[tuple[str, dict[str, Position], Decimal]]
 ) -> dict[str, Position]:
     items = [
         {"symbol": position.symbol, "quantity": position.quantity, "price": position.price}
-        for _, positions in accounts for position in positions.values()
+        for _, positions, _ in accounts for position in positions.values()
     ]
     return _parse_positions(items)
 
 
 def _print_asset_table(
-    label: str, positions: dict[str, Position], asset_classes: dict[str, str]
+    label: str, positions: dict[str, Position], cash: Decimal,
+    asset_classes: dict[str, str],
 ) -> None:
     print(f"CURRENT ASSETS — {label}")
     print("SYMBOL CLASS              QUANTITY        PRICE        VALUE")
@@ -279,17 +285,18 @@ def _print_asset_table(
                 f"{position.quantity:>12,f} ${position.price:>11,.2f} "
                 f"${position.market_value:>11,.2f}"
             )
-        total_assets = sum(
-            (position.market_value for position in positions.values()), Decimal(0)
-        )
-        print(f"{'TOTAL':<48}${total_assets:>11,.2f}\n")
     else:
-        print("(no positions)\n")
+        print("(no positions)")
         if label.startswith("ROBINHOOD"):
             print(
                 "WARNING: Robinhood returned no equity positions for this account. "
-                "Verify its number in config.json.\n"
+                "Verify its number in config.json."
             )
+    total_assets = sum(
+        (position.market_value for position in positions.values()), Decimal(0)
+    )
+    print(f"{'CASH':<48}${cash:>11,.2f}")
+    print(f"{'TOTAL':<48}${total_assets + cash:>11,.2f}\n")
 
 
 def normalize_snapshot(portfolio: Any, positions: Any, quotes: Any) -> dict[str, Any]:

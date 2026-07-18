@@ -16,6 +16,7 @@
   "external_accounts": [
     {
       "name": "401(k)",
+      "cash": 500,
       "assets": [
         {"symbol": "VTI", "quantity": 10}
       ]
