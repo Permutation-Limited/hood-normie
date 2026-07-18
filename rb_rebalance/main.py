@@ -190,8 +190,6 @@ def main() -> int:
             print(f"{r.action:<6} {r.asset_class:<12} "
                   f"${abs(r.amount):>11,.2f} "
                   f"${r.current_value:>11,.2f} ${r.target_value:>11,.2f}")
-        projected_cash = target_cash
-        print(f"\nProjected cash: ${projected_cash:,.2f}")
     return 0
 
 
