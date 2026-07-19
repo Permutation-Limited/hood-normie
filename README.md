@@ -34,6 +34,28 @@ cp examples/rebalance/config.example.yaml config.yaml
 bazel run //examples/rebalance:rebalance
 ```
 
+Example output (using illustrative account values):
+
+```text
+CURRENT ASSETS — ROBINHOOD ACCOUNT EXAMPLE
+SYMBOL CLASS              QUANTITY        PRICE        VALUE
+VTI    stocks              200.000 $     400.00 $  80,000.00
+BND    bonds               250.000 $      72.00 $  18,000.00
+CASH                                            $  -1,000.00
+TOTAL                                           $  97,000.00
+
+COMPOSITE PORTFOLIO
+TOTAL                                           $  97,000.00
+
+ACTION CLASS              AMOUNT      CURRENT       TARGET
+BUY    bonds        $   1,800.00 $  18,000.00 $  19,800.00
+SELL   stocks       $     800.00 $  80,000.00 $  79,200.00
+SELL   cash         $   1,000.00 $  -1,000.00 $  -2,000.00
+```
+
+The recommendations are class-level dollar adjustments only. The example is
+read-only and does not choose a security or place an order.
+
 The detailed rebalancer configuration is documented in
 [`examples/rebalance/README.md`](examples/rebalance/README.md).
 
