@@ -21,6 +21,7 @@ py_binary(
     deps = [
         ":core",
         "//examples:paths",
+        "//examples:terminal",
         "//hood_normie",
     ],
 )

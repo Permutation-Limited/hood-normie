@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from examples.paths import workspace_path
+from examples.terminal import Style, color_enabled
 from examples.rebalance.core import (
     ClassTarget, Position, calculate, calculate_cash, configured_account_numbers,
     decimal, load_config,
@@ -17,33 +18,6 @@ from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
 DEFAULT_CONFIG = "config.yaml"
-
-
-class Style:
-    """Small, dependency-free ANSI styling helper."""
-
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    RED = "\033[31m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    CYAN = "\033[36m"
-
-    def __init__(self, enabled: bool) -> None:
-        self.enabled = enabled
-
-    def apply(self, value: object, *codes: str) -> str:
-        text = str(value)
-        return f"{''.join(codes)}{text}{self.RESET}" if self.enabled else text
-
-
-def _color_enabled(mode: str, stream: object) -> bool:
-    if mode == "always":
-        return True
-    if mode == "never" or os.environ.get("NO_COLOR") is not None:
-        return False
-    return bool(getattr(stream, "isatty", lambda: False)())
 
 
 def main() -> int:
@@ -63,7 +37,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true",
                         help="print MCP JSON-RPC requests and responses to stderr")
     args = parser.parse_args()
-    style = Style(_color_enabled(args.color, sys.stdout) and not args.json)
+    style = Style(color_enabled(args.color, sys.stdout) and not args.json)
 
     args.config = workspace_path(args.config)
     args.token_file = workspace_path(args.token_file)
@@ -170,7 +144,7 @@ def main() -> int:
     )
     warning_stream = sys.stderr if args.json else sys.stdout
     if unclassified:
-        warning_style = Style(_color_enabled(args.color, warning_stream) and not args.json)
+        warning_style = Style(color_enabled(args.color, warning_stream) and not args.json)
         print(warning_style.apply(
             "⚠ NOTICE: Unclassified assets are implicitly ignored in allocation calculations:",
             warning_style.BOLD, warning_style.YELLOW,

@@ -33,6 +33,13 @@ List the Robinhood accounts available to the authenticated user:
 bazel run //examples:list_accounts
 ```
 
+List equity holdings in every account, or select one account number:
+
+```sh
+bazel run //examples:list_holdings
+bazel run //examples:list_holdings -- --account ACCOUNT_NUMBER
+```
+
 Run the composite portfolio rebalancer:
 
 ```sh

@@ -12,6 +12,11 @@ py_library(
     srcs = ["__init__.py", "paths.py"],
 )
 
+py_library(
+    name = "terminal",
+    srcs = ["terminal.py"],
+)
+
 py_binary(
     name = "authenticate",
     srcs = ["authenticate.py"],
@@ -37,5 +42,24 @@ py_test(
     srcs = ["list_accounts_test.py"],
     deps = [
         ":list_accounts",
+    ],
+)
+
+py_binary(
+    name = "list_holdings",
+    srcs = ["list_holdings.py"],
+    main = "list_holdings.py",
+    deps = [
+        ":paths",
+        ":terminal",
+        "//hood_normie",
+    ],
+)
+
+py_test(
+    name = "list_holdings_test",
+    srcs = ["list_holdings_test.py"],
+    deps = [
+        ":list_holdings",
     ],
 )
