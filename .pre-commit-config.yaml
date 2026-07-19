@@ -12,3 +12,18 @@ repos:
         stages:
           - pre-commit
         entry: bazel run --config=pre-commit -- //hooks:detect-secrets
+        args:
+          - --disable-filter
+          - detect_secrets.filters.common.is_invalid_file
+          - --disable-filter
+          - detect_secrets.filters.heuristic.is_non_text_file
+        exclude: ^MODULE\.bazel\.lock$
+      - id: robinhood-account-numbers
+        name: Detect Robinhood account numbers
+        description: Prevents Robinhood account numbers from being committed.
+        language: system
+        require_serial: true
+        stages:
+          - pre-commit
+        entry: bazel run --config=pre-commit -- //hooks:robinhood-account-numbers
+        exclude: ^MODULE\.bazel\.lock|hooks/robinhood_account_number_detector_test\.py$

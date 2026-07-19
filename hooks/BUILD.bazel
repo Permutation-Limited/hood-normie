@@ -4,33 +4,35 @@ load("@pre-commit//pre-commit/run:defs.bzl", "pre_commit_run")
 load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 
 py_binary(
-    name = "detect-secrets-cli",
-    srcs = [
-        "__init__.py",
-        "detect_secrets_hook.py",
-        "robinhood_account_detector.py",
-    ],
-    main = "detect_secrets_hook.py",
-    deps = ["@pip//detect_secrets"],
+    name = "robinhood-account-number-detector",
+    srcs = ["robinhood_account_number_detector.py"],
+    main = "robinhood_account_number_detector.py",
 )
 
 pre_commit_hook(
     name = "detect-secrets",
     stages = ["@pre-commit//pre-commit/stage:pre-commit"],
-    src = ":detect-secrets-cli",
+    src = "//:detect-secrets-hook",
     summary = "Detect secrets",
     description = "Prevents secrets from being committed.",
 )
 
+pre_commit_hook(
+    name = "robinhood-account-numbers",
+    stages = ["@pre-commit//pre-commit/stage:pre-commit"],
+    src = ":robinhood-account-number-detector",
+    summary = "Detect Robinhood account numbers",
+    description = "Prevents Robinhood account numbers from being committed.",
+)
+
 py_test(
-    name = "robinhood_account_detector_test",
+    name = "robinhood_account_number_detector_test",
     srcs = [
         "__init__.py",
-        "robinhood_account_detector.py",
-        "robinhood_account_detector_test.py",
+        "robinhood_account_number_detector.py",
+        "robinhood_account_number_detector_test.py",
     ],
-    main = "robinhood_account_detector_test.py",
-    deps = ["@pip//detect_secrets"],
+    main = "robinhood_account_number_detector_test.py",
 )
 
 pre_commit_install(

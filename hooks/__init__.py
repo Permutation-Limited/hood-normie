@@ -1,1 +1,1 @@
-"""Repository-specific pre-commit hooks."""
+"""Repository pre-commit hooks."""
