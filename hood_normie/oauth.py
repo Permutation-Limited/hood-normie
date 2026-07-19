@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import secrets
 import time
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -41,7 +41,7 @@ def _request(url: str, body: bytes | None, headers: Mapping[str, str]) -> dict[s
     request = urllib.request.Request(url, data=body, headers=dict(headers))
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
+            return cast(dict[str, Any], json.load(response))
     except urllib.error.HTTPError as error:
         detail = error.read().decode(errors="replace")
         raise OAuthError(f"OAuth HTTP {error.code} from {url}: {detail}") from error

@@ -87,20 +87,22 @@ def main() -> int:
         key.upper(): decimal(value) for key, value in portfolio_data.get("prices", {}).items()
     }
     for external in external_accounts:
-        parsed: dict[str, Position] = {}
+        external_positions: dict[str, Position] = {}
         external_cash = decimal(external.get("cash", 0))
         for item in external.get("assets", []):
             symbol = item["symbol"].upper()
-            if symbol in parsed:
+            if symbol in external_positions:
                 raise ValueError(f"duplicate symbol {symbol} in external account {external['name']}")
             price = prices.get(symbol)
             if price is None:
                 raise ValueError(
                     f"Robinhood did not return a quote for external asset {symbol}"
                 )
-            parsed[symbol] = Position(symbol, decimal(item["quantity"]), price)
+            external_positions[symbol] = Position(
+                symbol, decimal(item["quantity"]), price
+            )
         account_positions.append(
-            (f"EXTERNAL ACCOUNT {external['name']}", parsed, external_cash)
+            (f"EXTERNAL ACCOUNT {external['name']}", external_positions, external_cash)
         )
         current_cash += external_cash
 

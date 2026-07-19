@@ -3,6 +3,11 @@ load("@pip//:requirements.bzl", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "typecheck_sources",
+    srcs = glob(["*.py"]),
+)
+
 py_library(
     name = "core",
     srcs = ["__init__.py", "core.py"],

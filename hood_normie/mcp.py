@@ -5,7 +5,7 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 
 class McpError(RuntimeError):
@@ -54,7 +54,7 @@ class RobinhoodMcpClient:
         })
         if "error" in response:
             raise McpError(f"MCP {method} failed: {response['error']}")
-        return response.get("result", {})
+        return cast(Mapping[str, Any], response.get("result", {}))
 
     def _notify(self, method: str, params: Mapping[str, Any]) -> None:
         self._post({"jsonrpc": "2.0", "method": method, "params": params}, notification=True)

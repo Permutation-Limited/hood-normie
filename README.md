@@ -73,6 +73,9 @@ accounts = client.call_tool("get_accounts")
 bazel test //...
 ```
 
+The suite includes the `//:typecheck` mypy target. Run it independently with
+`bazel test //:typecheck` when you only need static type validation.
+
 ## Pre-commit checks
 
 Install the repository's Git pre-commit hook with:

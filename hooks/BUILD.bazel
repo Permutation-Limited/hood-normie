@@ -3,6 +3,13 @@ load("@pre-commit//pre-commit/install:defs.bzl", "pre_commit_install")
 load("@pre-commit//pre-commit/run:defs.bzl", "pre_commit_run")
 load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "typecheck_sources",
+    srcs = glob(["*.py"]),
+)
+
 py_binary(
     name = "robinhood-account-number-detector",
     srcs = ["robinhood_account_number_detector.py"],

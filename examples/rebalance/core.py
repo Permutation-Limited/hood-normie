@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 import yaml
 
@@ -10,7 +10,7 @@ import yaml
 CENT = Decimal("0.01")
 
 
-def load_config(path: str) -> dict[str, object]:
+def load_config(path: str) -> dict[str, Any]:
     """Load a YAML mapping from an explicitly YAML-named config file."""
     if not path.lower().endswith((".yaml", ".yml")):
         raise ValueError("config path must end in .yaml or .yml")
@@ -26,7 +26,7 @@ def decimal(value: object) -> Decimal:
     return Decimal(str(value).replace("$", "").replace(",", ""))
 
 
-def configured_account_numbers(config: Mapping[str, object]) -> list[str]:
+def configured_account_numbers(config: Mapping[str, Any]) -> list[str]:
     """Return configured brokerage accounts from the plural config field."""
     if "account_number" in config:
         raise ValueError(
@@ -95,7 +95,9 @@ def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
     if any(target.weight is None for target in variable):
         missing = ", ".join(target.name for target in variable if target.weight is None)
         raise ValueError(f"classes without target_amount require weight: {missing}")
-    variable_weight = sum((target.weight for target in variable), Decimal(0))
+    variable_weight = sum(
+        (target.weight or Decimal(0) for target in variable), Decimal(0)
+    )
     if variable and variable_weight <= 0:
         raise ValueError("percentage-targeted class weights must total more than zero")
     if len(variable) == len(active) and abs(variable_weight - Decimal(1)) > Decimal("0.000001"):
@@ -151,7 +153,9 @@ def calculate(
         target for target in checked_targets
         if not target.ignore and target.target_amount is None
     ]
-    variable_weight = sum((target.weight for target in variable_targets), Decimal(0))
+    variable_weight = sum(
+        (target.weight or Decimal(0) for target in variable_targets), Decimal(0)
+    )
     if not variable_targets and remaining_target != 0:
         raise ValueError(
             "fixed class targets do not consume the investable target and no "
@@ -180,7 +184,7 @@ def calculate(
             continue
         current = current_by_class[target.name]
         desired = (target.target_amount if target.target_amount is not None else
-                   remaining_target * target.weight / variable_weight)
+                   remaining_target * (target.weight or Decimal(0)) / variable_weight)
         amount = desired - current
         if abs(amount) < minimum_trade:
             amount = Decimal(0)

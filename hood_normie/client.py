@@ -81,7 +81,12 @@ def normalize_account(
         "portfolioEquity", "equity",
     )
     portfolio_record = find_record_with_field(portfolio, value_fields)
-    net_value = money_value(first(portfolio_record, *value_fields)) if portfolio_record else None
+    if portfolio_record is None:
+        raise ValueError(
+            "could not find net liquidation/total value in get_portfolio response. "
+            f"Response shape (values omitted): {response_shape(portfolio)}"
+        )
+    net_value = money_value(first(portfolio_record, *value_fields))
     if net_value is None:
         raise ValueError(
             "could not find net liquidation/total value in get_portfolio response. "
