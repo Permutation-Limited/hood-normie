@@ -31,7 +31,6 @@ bazel run //examples/rebalance:rebalance
 The detailed rebalancer configuration is documented in
 [`examples/rebalance/README.md`](examples/rebalance/README.md).
 
-
 ## Bazel library
 
 Depend on:
@@ -66,4 +65,19 @@ accounts = client.call_tool("get_accounts")
 
 ```sh
 bazel test //...
+```
+
+## Pre-commit checks
+
+Install the repository's Git pre-commit hook with:
+
+```sh
+bazel run //hooks:install
+```
+
+The hook currently runs only `detect-secrets` against staged files. Run it
+manually against all tracked files with:
+
+```sh
+bazel run //hooks:run -- --all-files
 ```

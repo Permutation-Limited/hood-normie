@@ -1,6 +1,7 @@
 module(name = "hood_normie", version = "0.1.0")
 
 bazel_dep(name = "rules_python", version = "1.7.0")
+bazel_dep(name = "pre-commit", version = "1.0.11")
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(

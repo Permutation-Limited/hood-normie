@@ -1,0 +1,15 @@
+load("@pre-commit//pre-commit:defs.bzl", "pre_commit")
+load("@pre-commit//pre-commit/hook:defs.bzl", "pre_commit_hook")
+
+pre_commit_hook(
+    name = "detect-secrets",
+    stages = ["@pre-commit//pre-commit/stage:pre-commit"],
+    src = "//:detect-secrets-hook",
+    summary = "Detect secrets",
+    description = "Prevents secrets from being committed.",
+)
+
+pre_commit(
+    name = "hooks",
+    srcs = [":detect-secrets"],
+)
