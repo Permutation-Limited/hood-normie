@@ -8,19 +8,21 @@ import sys
 from typing import Any
 
 from examples.paths import workspace_path
-from examples.rebalance.core import ClassTarget, Position, calculate, calculate_cash, decimal
+from examples.rebalance.core import (
+    ClassTarget, Position, calculate, calculate_cash, decimal, load_config,
+)
 from hood_normie import RobinhoodClient
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
-DEFAULT_CONFIG = "config.json"
+DEFAULT_CONFIG = "config.yaml"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compute a read-only Robinhood rebalance plan")
     parser.add_argument("--config", default=DEFAULT_CONFIG,
-                        help=f"target allocation JSON (default: {DEFAULT_CONFIG})")
+                        help=f"target allocation YAML (default: {DEFAULT_CONFIG})")
     parser.add_argument("--account", action="append",
                         help="Robinhood account number; repeat for multiple accounts")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
@@ -34,14 +36,13 @@ def main() -> int:
     args.config = workspace_path(args.config)
     args.token_file = workspace_path(args.token_file)
 
-    with open(args.config, encoding="utf-8") as stream:
-        config = json.load(stream)
+    config = load_config(args.config)
     if "classes" not in config or "assets" not in config:
         if "targets" in config:
             raise ValueError(
                 "config uses the old per-symbol targets schema; replace it with "
                 "top-level classes and assets sections "
-                "(see examples/rebalance/config.example.json)"
+                "(see examples/rebalance/config.example.yaml)"
             )
         raise ValueError("config must contain top-level classes and assets sections")
     targets = [ClassTarget(
@@ -217,7 +218,7 @@ def _print_asset_table(
         if label.startswith("ROBINHOOD"):
             print(
                 "WARNING: Robinhood returned no equity positions for this account. "
-                "Verify its number in config.json."
+                "Verify its number in config.yaml."
             )
     total_assets = sum(
         (position.market_value for position in positions.values()), Decimal(0)

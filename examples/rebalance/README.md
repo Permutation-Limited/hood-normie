@@ -26,32 +26,24 @@ are aggregated before calculating the recommendation.
 
 `classes` defines the allocation policy. `assets` only classifies symbols:
 
-```json
-{
-  "robinhood_account_numbers": ["ACCOUNT_ONE", "ACCOUNT_TWO"],
-  "target_cash": -2000,
-  "minimum_trade": 5,
-  "classes": [
-    {"name": "stocks", "weight": 0.80, "target_amount": null, "ignore": false},
-    {"name": "bonds", "weight": 0.20, "target_amount": null, "ignore": false},
-    {"name": "legacy", "ignore": true}
-  ],
-  "assets": [
-    {"symbol": "VTI", "class": "stocks"},
-    {"symbol": "VXUS", "class": "stocks"},
-    {"symbol": "BND", "class": "bonds"},
-    {"symbol": "OLD", "class": "legacy"}
-  ],
-  "external_accounts": [
-    {
-      "name": "401(k)",
-      "cash": 500,
-      "assets": [
-        {"symbol": "VTI", "quantity": 10}
-      ]
-    }
-  ]
-}
+```yaml
+robinhood_account_numbers: [ACCOUNT_ONE, ACCOUNT_TWO]
+target_cash: -2000
+minimum_trade: 5
+classes:
+  - {name: stocks, weight: 0.80, target_amount: null, ignore: false}
+  - {name: bonds, weight: 0.20, target_amount: null, ignore: false}
+  - {name: legacy, ignore: true}
+assets:
+  - {symbol: VTI, class: stocks}
+  - {symbol: VXUS, class: stocks}
+  - {symbol: BND, class: bonds}
+  - {symbol: OLD, class: legacy}
+external_accounts:
+  - name: 401(k)
+    cash: 500
+    assets:
+      - {symbol: VTI, quantity: 10}
 ```
 
 The output says how many dollars of each class to buy or sell. It deliberately
@@ -61,7 +53,7 @@ and produce a notice before the recommendations.
 
 ### Ignored classes
 
-Set `"ignore": true` on a class to leave its assets entirely outside allocation
+Set `ignore: true` on a class to leave its assets entirely outside allocation
 calculations. Ignored and unclassified asset values are subtracted from the
 allocation base and excluded from active class balances; the program assumes no
 trade in them. Ignored classes and the aggregate implicit `unclassified` class
@@ -89,11 +81,10 @@ output.
 Set `target_amount` on a class to target an exact dollar value. It takes priority
 over that class's `weight`:
 
-```json
-"classes": [
-  {"name": "stocks", "weight": 0.80, "target_amount": null},
-  {"name": "bonds", "weight": 0.20, "target_amount": 250000}
-]
+```yaml
+classes:
+  - {name: stocks, weight: 0.80, target_amount: null}
+  - {name: bonds, weight: 0.20, target_amount: 250000}
 ```
 
 The program first reserves `$250,000` for bonds. It then distributes the
@@ -128,18 +119,19 @@ tables, a composite portfolio `TOTAL` shows the combined net liquidation value.
 Create a local config from the checked-in example:
 
 ```sh
-cp examples/rebalance/config.example.json config.json
+cp examples/rebalance/config.example.yaml config.yaml
 ```
 
-`config.json` is ignored by Git, while the example remains checked in as
+`config.yaml` is ignored by Git, while the example remains checked in as
 documentation. Edit it with your actual target allocation and account numbers:
 
-```json
-"robinhood_account_numbers": ["ACCOUNT_ONE", "ACCOUNT_TWO"]
+```yaml
+robinhood_account_numbers: [ACCOUNT_ONE, ACCOUNT_TWO]
 ```
 
 Replace the existing `robinhood_account_numbers` line; the snippet above is only
-that one field, not a complete config file. Then run:
+that one field, not a complete config file. JSON config files are not accepted.
+Then run:
 
 ```sh
 bazel test //...

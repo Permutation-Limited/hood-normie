@@ -24,7 +24,7 @@ bazel run //examples:authenticate
 Run the composite portfolio rebalancer:
 
 ```sh
-cp examples/rebalance/config.example.json config.json
+cp examples/rebalance/config.example.yaml config.yaml
 bazel run //examples/rebalance:rebalance
 ```
 

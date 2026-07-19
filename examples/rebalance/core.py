@@ -4,8 +4,21 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Iterable, Mapping
 
+import yaml
+
 
 CENT = Decimal("0.01")
+
+
+def load_config(path: str) -> dict[str, object]:
+    """Load a YAML mapping from an explicitly YAML-named config file."""
+    if not path.lower().endswith((".yaml", ".yml")):
+        raise ValueError("config path must end in .yaml or .yml")
+    with open(path, encoding="utf-8") as stream:
+        config = yaml.safe_load(stream)
+    if not isinstance(config, dict):
+        raise ValueError("config must be a YAML mapping")
+    return config
 
 
 def decimal(value: object) -> Decimal:

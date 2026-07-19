@@ -1,7 +1,10 @@
 from decimal import Decimal
 import unittest
+from unittest.mock import mock_open, patch
 
-from examples.rebalance.core import ClassTarget, Position, calculate, calculate_cash
+from examples.rebalance.core import (
+    ClassTarget, Position, calculate, calculate_cash, load_config,
+)
 from examples.paths import workspace_path
 from hood_normie.accounts import select_account
 
@@ -180,15 +183,30 @@ class CalculateTest(unittest.TestCase):
 class WorkspacePathTest(unittest.TestCase):
     def test_relative_path_uses_bazel_workspace(self):
         self.assertEqual(
-            workspace_path("config.json", {"BUILD_WORKSPACE_DIRECTORY": "/repo"}),
-            "/repo/config.json",
+            workspace_path("config.yaml", {"BUILD_WORKSPACE_DIRECTORY": "/repo"}),
+            "/repo/config.yaml",
         )
 
     def test_absolute_path_is_unchanged(self):
-        self.assertEqual(workspace_path("/tmp/config.json", {}), "/tmp/config.json")
+        self.assertEqual(workspace_path("/tmp/config.yaml", {}), "/tmp/config.yaml")
 
     def test_direct_execution_keeps_relative_path(self):
-        self.assertEqual(workspace_path("config.json", {}), "config.json")
+        self.assertEqual(workspace_path("config.yaml", {}), "config.yaml")
+
+
+class ConfigTest(unittest.TestCase):
+    def test_loads_yaml(self):
+        with patch("builtins.open", mock_open(read_data="classes: []\nassets: []\n")):
+            self.assertEqual(load_config("config.yaml"), {"classes": [], "assets": []})
+
+    def test_rejects_json_path(self):
+        with self.assertRaisesRegex(ValueError, "must end in .yaml or .yml"):
+            load_config("config.json")
+
+    def test_requires_mapping(self):
+        with patch("builtins.open", mock_open(read_data="- not\n- a\n- mapping\n")):
+            with self.assertRaisesRegex(ValueError, "must be a YAML mapping"):
+                load_config("config.yaml")
 
 
 class AccountSelectionTest(unittest.TestCase):
