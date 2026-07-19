@@ -7,10 +7,30 @@ A small Python library for Robinhood's official Trading MCP server. It provides:
 - Account discovery and selection helpers.
 - Typed high-level access to accounts, portfolios, equity positions, and quotes.
 - Stable normalization of Robinhood responses and multi-account portfolio data.
+- A targeted example showing how to implement simple portfolio rebalancing (read-only instructions, doesn't execute trades)
 
 The library is read/write capable at the MCP transport layer, but its high-level
 `RobinhoodClient` currently exposes read-only portfolio methods. The included
 examples do not place trades.
+
+## Examples
+
+Authenticate interactively:
+
+```sh
+bazel run //examples:authenticate
+```
+
+Run the composite portfolio rebalancer:
+
+```sh
+cp examples/rebalance/config.example.json config.json
+bazel run //examples/rebalance:rebalance
+```
+
+The detailed rebalancer configuration is documented in
+[`examples/rebalance/README.md`](examples/rebalance/README.md).
+
 
 ## Bazel library
 
@@ -41,27 +61,6 @@ client = RobinhoodMcpClient(endpoint, access_token)
 client.connect()
 accounts = client.call_tool("get_accounts")
 ```
-
-## Examples
-
-Authenticate interactively:
-
-```sh
-bazel run //examples:authenticate
-```
-
-Run the composite portfolio rebalancer:
-
-```sh
-cp examples/rebalance/config.example.json config.json
-bazel run //examples/rebalance:rebalance
-```
-
-The detailed rebalancer configuration is documented in
-[`examples/rebalance/README.md`](examples/rebalance/README.md).
-
-Compatibility aliases remain available as `//:authenticate`, `//:rebalance`,
-and `//:rebalance_lib`, but new users should use the targets under `//examples`.
 
 ## Tests
 
