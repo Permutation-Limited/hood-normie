@@ -1,0 +1,30 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "core",
+    srcs = ["__init__.py", "core.py"],
+)
+
+py_binary(
+    name = "rebalance",
+    srcs = ["main.py"],
+    main = "main.py",
+    deps = [
+        ":core",
+        "//examples:paths",
+        "//hood_mcp_py",
+    ],
+)
+
+py_test(
+    name = "core_test",
+    srcs = ["core_test.py"],
+    deps = [
+        ":core",
+        "//examples:paths",
+        "//hood_mcp_py",
+    ],
+)
+

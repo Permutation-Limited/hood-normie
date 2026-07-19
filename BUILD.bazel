@@ -1,35 +1,10 @@
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
-
 package(default_visibility = ["//visibility:public"])
 
-py_library(
-    name = "rebalance_lib",
-    srcs = [
-        "rb_rebalance/__init__.py",
-        "rb_rebalance/accounts.py",
-        "rb_rebalance/core.py",
-        "rb_rebalance/mcp.py",
-        "rb_rebalance/oauth.py",
-        "rb_rebalance/paths.py",
-    ],
-)
+# Compatibility aliases. New code should depend on //hood_mcp_py and invoke
+# binaries from //examples.
+alias(name = "hood_mcp_py", actual = "//hood_mcp_py")
+alias(name = "rebalance_lib", actual = "//examples/rebalance:core")
+alias(name = "authenticate", actual = "//examples:authenticate")
+alias(name = "rebalance", actual = "//examples/rebalance:rebalance")
+alias(name = "core_test", actual = "//examples/rebalance:core_test")
 
-py_binary(
-    name = "authenticate",
-    srcs = ["rb_rebalance/authenticate.py"],
-    main = "rb_rebalance/authenticate.py",
-    deps = [":rebalance_lib"],
-)
-
-py_binary(
-    name = "rebalance",
-    srcs = ["rb_rebalance/main.py"],
-    main = "rb_rebalance/main.py",
-    deps = [":rebalance_lib"],
-)
-
-py_test(
-    name = "core_test",
-    srcs = ["tests/core_test.py"],
-    deps = [":rebalance_lib"],
-)

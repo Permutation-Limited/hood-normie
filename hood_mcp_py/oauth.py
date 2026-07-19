@@ -73,7 +73,7 @@ def register_client(metadata: Mapping[str, Any], redirect_uri: str) -> dict[str,
     if not endpoint:
         raise OAuthError("authorization server does not advertise dynamic registration")
     return json_request(str(endpoint), data={
-        "client_name": "rb-rebalance",
+        "client_name": "hood-mcp-py",
         "redirect_uris": [redirect_uri],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
@@ -147,7 +147,9 @@ def load_access_token(path: str) -> str:
         with open(path, encoding="utf-8") as stream:
             token = json.load(stream)
     except FileNotFoundError as error:
-        raise OAuthError(f"token file not found: {path}; run //:authenticate first") from error
+        raise OAuthError(
+            f"token file not found: {path}; run //examples:authenticate first"
+        ) from error
     if token.get("expires_at", 0) <= time.time() + 60:
         refresh = token.get("refresh_token")
         if not refresh:
@@ -168,4 +170,3 @@ def load_access_token(path: str) -> str:
     if not access_token:
         raise OAuthError(f"no access_token in {path}")
     return str(access_token)
-

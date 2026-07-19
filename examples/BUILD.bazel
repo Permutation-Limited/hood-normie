@@ -1,0 +1,19 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "paths",
+    srcs = ["__init__.py", "paths.py"],
+)
+
+py_binary(
+    name = "authenticate",
+    srcs = ["authenticate.py"],
+    main = "authenticate.py",
+    deps = [
+        ":paths",
+        "//hood_mcp_py",
+    ],
+)
+

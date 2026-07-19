@@ -1,9 +1,9 @@
 from decimal import Decimal
 import unittest
 
-from rb_rebalance.core import ClassTarget, Position, calculate, calculate_cash
-from rb_rebalance.paths import workspace_path
-from rb_rebalance.accounts import select_account
+from examples.rebalance.core import ClassTarget, Position, calculate, calculate_cash
+from examples.paths import workspace_path
+from hood_mcp_py.accounts import select_account
 
 
 class CalculateTest(unittest.TestCase):

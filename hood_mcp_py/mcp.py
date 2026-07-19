@@ -26,7 +26,7 @@ class RobinhoodMcpClient:
         self._rpc("initialize", {
             "protocolVersion": "2025-03-26",
             "capabilities": {},
-            "clientInfo": {"name": "rb-rebalance", "version": "0.1.0"},
+            "clientInfo": {"name": "hood-mcp-py", "version": "0.1.0"},
         })
         self._notify("notifications/initialized", {})
 

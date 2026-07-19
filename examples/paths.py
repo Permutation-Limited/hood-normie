@@ -1,4 +1,4 @@
-"""Resolve user files consistently under `bazel run` and direct execution."""
+"""Resolve example files consistently under `bazel run` and direct execution."""
 
 import os
 from pathlib import Path
@@ -18,4 +18,3 @@ def workspace_path(path: str, environ: Mapping[str, str] | None = None) -> str:
     environment = os.environ if environ is None else environ
     workspace = environment.get("BUILD_WORKSPACE_DIRECTORY")
     return str(Path(workspace) / candidate) if workspace else str(candidate)
-

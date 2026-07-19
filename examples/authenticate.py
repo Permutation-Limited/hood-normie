@@ -1,4 +1,4 @@
-"""Interactive Robinhood MCP OAuth authentication helper."""
+"""Example interactive Robinhood MCP OAuth authentication helper."""
 
 import argparse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -7,11 +7,11 @@ import threading
 import urllib.parse
 import webbrowser
 
-from rb_rebalance.oauth import (
+from hood_mcp_py.oauth import (
     DEFAULT_ENDPOINT, DEFAULT_TOKEN_FILE, OAuthError, authorization_url,
     discover, exchange_code, pkce_pair, register_client, save_token,
 )
-from rb_rebalance.paths import workspace_path
+from examples.paths import workspace_path
 
 
 class CallbackHandler(BaseHTTPRequestHandler):
@@ -37,7 +37,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Authenticate rb-rebalance with Robinhood MCP")
+    parser = argparse.ArgumentParser(description="Authenticate hood-mcp-py with Robinhood MCP")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--timeout", type=int, default=300,
