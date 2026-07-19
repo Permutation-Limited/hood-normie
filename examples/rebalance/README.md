@@ -107,10 +107,9 @@ has its own table, while the final action table uses their combined holdings.
 
 ### Multiple and external accounts
 
-Put any number of brokerage numbers in `robinhood_account_numbers`. The legacy
-singular `account_number` remains supported when the plural field is absent. On
-the command line, repeat `--account NUMBER` to override the configured list for
-one run.
+Put any number of brokerage numbers in `robinhood_account_numbers`. On the
+command line, repeat `--account NUMBER` to override the configured list for one
+run.
 
 `external_accounts` contains named accounts whose positions are not retrieved
 from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
@@ -183,9 +182,8 @@ bazel run //examples/rebalance:rebalance
 ```
 
 For live requests, account selection uses repeated `--account` arguments first,
-then `robinhood_account_numbers`, then the legacy singular `account_number`, and
-finally automatic selection when Robinhood returns exactly one recognizable
-account.
+then `robinhood_account_numbers`, and finally automatic selection when Robinhood
+returns exactly one recognizable account.
 
 The rebalancer reads the saved token and refreshes it automatically when needed.
 `ROBINHOOD_MCP_TOKEN` is still supported as a temporary override, but storing a

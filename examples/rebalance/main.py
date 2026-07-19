@@ -9,7 +9,8 @@ from typing import Any
 
 from examples.paths import workspace_path
 from examples.rebalance.core import (
-    ClassTarget, Position, calculate, calculate_cash, decimal, load_config,
+    ClassTarget, Position, calculate, calculate_cash, configured_account_numbers,
+    decimal, load_config,
 )
 from hood_normie import RobinhoodClient
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
@@ -65,11 +66,7 @@ def main() -> int:
         item["symbol"].upper()
         for account in external_accounts for item in account.get("assets", [])
     }
-    configured_accounts = config.get("robinhood_account_numbers")
-    if configured_accounts is None:
-        configured_accounts = ([str(config["account_number"])]
-                               if config.get("account_number") else [])
-    account_numbers = args.account or [str(value) for value in configured_accounts]
+    account_numbers = args.account or configured_account_numbers(config)
 
     portfolio_data = fetch_portfolios(
         args.endpoint, account_numbers,

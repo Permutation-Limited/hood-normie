@@ -3,7 +3,8 @@ import unittest
 from unittest.mock import mock_open, patch
 
 from examples.rebalance.core import (
-    ClassTarget, Position, calculate, calculate_cash, load_config,
+    ClassTarget, Position, calculate, calculate_cash, configured_account_numbers,
+    load_config,
 )
 from examples.paths import workspace_path
 from hood_normie.accounts import select_account
@@ -213,6 +214,16 @@ class WorkspacePathTest(unittest.TestCase):
 
 
 class ConfigTest(unittest.TestCase):
+    def test_reads_plural_account_numbers(self):
+        self.assertEqual(
+            configured_account_numbers({"robinhood_account_numbers": [123, "456"]}),
+            ["123", "456"],
+        )
+
+    def test_rejects_legacy_singular_account_number(self):
+        with self.assertRaisesRegex(ValueError, "no longer supported"):
+            configured_account_numbers({"account_number": "123"})
+
     def test_loads_yaml(self):
         with patch("builtins.open", mock_open(read_data="classes: []\nassets: []\n")):
             self.assertEqual(load_config("config.yaml"), {"classes": [], "assets": []})

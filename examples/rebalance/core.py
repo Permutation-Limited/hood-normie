@@ -26,6 +26,16 @@ def decimal(value: object) -> Decimal:
     return Decimal(str(value).replace("$", "").replace(",", ""))
 
 
+def configured_account_numbers(config: Mapping[str, object]) -> list[str]:
+    """Return configured brokerage accounts from the plural config field."""
+    if "account_number" in config:
+        raise ValueError(
+            "config field account_number is no longer supported; use "
+            "robinhood_account_numbers"
+        )
+    return [str(value) for value in config.get("robinhood_account_numbers", [])]
+
+
 @dataclass(frozen=True)
 class ClassTarget:
     name: str
