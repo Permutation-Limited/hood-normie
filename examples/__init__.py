@@ -1,2 +1,1 @@
-"""Example applications built with hood-mcp-py."""
-
+"""Example applications built with hood-normie."""

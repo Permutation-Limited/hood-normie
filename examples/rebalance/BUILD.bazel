@@ -14,7 +14,7 @@ py_binary(
     deps = [
         ":core",
         "//examples:paths",
-        "//hood_mcp_py",
+        "//hood_normie",
     ],
 )
 
@@ -24,7 +24,6 @@ py_test(
     deps = [
         ":core",
         "//examples:paths",
-        "//hood_mcp_py",
+        "//hood_normie",
     ],
 )
-

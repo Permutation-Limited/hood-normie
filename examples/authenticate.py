@@ -7,7 +7,7 @@ import threading
 import urllib.parse
 import webbrowser
 
-from hood_mcp_py.oauth import (
+from hood_normie.oauth import (
     DEFAULT_ENDPOINT, DEFAULT_TOKEN_FILE, OAuthError, authorization_url,
     discover, exchange_code, pkce_pair, register_client, save_token,
 )
@@ -37,7 +37,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Authenticate hood-mcp-py with Robinhood MCP")
+    parser = argparse.ArgumentParser(description="Authenticate hood-normie with Robinhood MCP")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--timeout", type=int, default=300,

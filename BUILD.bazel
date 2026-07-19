@@ -1,10 +1,9 @@
 package(default_visibility = ["//visibility:public"])
 
-# Compatibility aliases. New code should depend on //hood_mcp_py and invoke
+# Compatibility aliases. New code should depend on //hood_normie and invoke
 # binaries from //examples.
-alias(name = "hood_mcp_py", actual = "//hood_mcp_py")
+alias(name = "hood_normie", actual = "//hood_normie")
 alias(name = "rebalance_lib", actual = "//examples/rebalance:core")
 alias(name = "authenticate", actual = "//examples:authenticate")
 alias(name = "rebalance", actual = "//examples/rebalance:rebalance")
 alias(name = "core_test", actual = "//examples/rebalance:core_test")
-

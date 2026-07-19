@@ -3,7 +3,7 @@ import unittest
 
 from examples.rebalance.core import ClassTarget, Position, calculate, calculate_cash
 from examples.paths import workspace_path
-from hood_mcp_py.accounts import select_account
+from hood_normie.accounts import select_account
 
 
 class CalculateTest(unittest.TestCase):

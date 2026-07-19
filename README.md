@@ -1,4 +1,4 @@
-# hood-mcp-py
+# hood-normie
 
 A small Python library for Robinhood's official Trading MCP server. It provides:
 
@@ -17,13 +17,13 @@ examples do not place trades.
 Depend on:
 
 ```starlark
-deps = ["//hood_mcp_py"]
+deps = ["//hood_normie"]
 ```
 
 Basic use:
 
 ```python
-from hood_mcp_py import RobinhoodClient
+from hood_normie import RobinhoodClient
 
 client = RobinhoodClient.from_token_file(".robinhood-mcp-token.json")
 portfolio = client.fetch_portfolios(
@@ -35,7 +35,7 @@ portfolio = client.fetch_portfolios(
 Lower-level access is available through `RobinhoodMcpClient`:
 
 ```python
-from hood_mcp_py import RobinhoodMcpClient
+from hood_normie import RobinhoodMcpClient
 
 client = RobinhoodMcpClient(endpoint, access_token)
 client.connect()

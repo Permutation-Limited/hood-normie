@@ -13,7 +13,6 @@ py_binary(
     main = "authenticate.py",
     deps = [
         ":paths",
-        "//hood_mcp_py",
+        "//hood_normie",
     ],
 )
-

@@ -3,7 +3,7 @@ load("@rules_python//python:defs.bzl", "py_library", "py_test")
 package(default_visibility = ["//visibility:public"])
 
 py_library(
-    name = "hood_mcp_py",
+    name = "hood_normie",
     srcs = [
         "__init__.py",
         "accounts.py",
@@ -16,6 +16,5 @@ py_library(
 py_test(
     name = "client_test",
     srcs = ["client_test.py"],
-    deps = [":hood_mcp_py"],
+    deps = [":hood_normie"],
 )
-

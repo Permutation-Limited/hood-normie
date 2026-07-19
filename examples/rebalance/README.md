@@ -1,6 +1,6 @@
 # Rebalancing example
 
-A read-only example built with `hood_mcp_py` that retrieves Robinhood portfolios through the
+A read-only example built with `hood_normie` that retrieves Robinhood portfolios through the
 official Trading MCP and prints the class-level dollar adjustments needed
 to reach a configured asset-class allocation and cash target. Recommendations
 are class-level dollar amounts; the tool does not choose which symbol to trade.

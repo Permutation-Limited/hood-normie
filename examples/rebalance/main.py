@@ -9,8 +9,8 @@ from typing import Any
 
 from examples.paths import workspace_path
 from examples.rebalance.core import ClassTarget, Position, calculate, calculate_cash, decimal
-from hood_mcp_py import RobinhoodClient
-from hood_mcp_py.oauth import DEFAULT_TOKEN_FILE, OAuthError
+from hood_normie import RobinhoodClient
+from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"

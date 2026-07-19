@@ -2,9 +2,9 @@
 
 from typing import Any, Iterable
 
-from hood_mcp_py.accounts import select_account
-from hood_mcp_py.mcp import RobinhoodMcpClient
-from hood_mcp_py.oauth import DEFAULT_ENDPOINT, load_access_token
+from hood_normie.accounts import select_account
+from hood_normie.mcp import RobinhoodMcpClient
+from hood_normie.oauth import DEFAULT_ENDPOINT, load_access_token
 
 
 class RobinhoodClient:

@@ -1,6 +1,6 @@
 import unittest
 
-from hood_mcp_py.client import normalize_account, normalize_quotes
+from hood_normie.client import normalize_account, normalize_quotes
 
 
 class ClientNormalizationTest(unittest.TestCase):

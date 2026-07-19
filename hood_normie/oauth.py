@@ -73,7 +73,7 @@ def register_client(metadata: Mapping[str, Any], redirect_uri: str) -> dict[str,
     if not endpoint:
         raise OAuthError("authorization server does not advertise dynamic registration")
     return json_request(str(endpoint), data={
-        "client_name": "hood-mcp-py",
+        "client_name": "hood-normie",
         "redirect_uris": [redirect_uri],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
