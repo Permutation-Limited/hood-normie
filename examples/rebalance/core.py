@@ -2,23 +2,62 @@
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Iterable, Mapping
+from typing import Iterable, Mapping, NotRequired, Required, TypedDict, cast
 
 import yaml
 
 
 CENT = Decimal("0.01")
 
+NumericInput = str | int | float
 
-def load_config(path: str) -> dict[str, Any]:
+
+class ClassConfig(TypedDict):
+    name: Required[str]
+    weight: NotRequired[NumericInput | None]
+    target_amount: NotRequired[NumericInput | None]
+    ignore: NotRequired[bool]
+
+
+AssetConfig = TypedDict("AssetConfig", {"symbol": str, "class": str})
+
+
+class ExternalAssetConfig(TypedDict):
+    symbol: str
+    quantity: NumericInput
+
+
+class ExternalAccountConfig(TypedDict):
+    name: str
+    cash: NotRequired[NumericInput]
+    assets: NotRequired[list[ExternalAssetConfig]]
+
+
+class AccountSelectionConfig(TypedDict):
+    robinhood_account_numbers: NotRequired[list[str | int]]
+    account_number: NotRequired[str | int]
+
+
+class RebalanceConfig(AccountSelectionConfig):
+    classes: Required[list[ClassConfig]]
+    assets: Required[list[AssetConfig]]
+    target_cash: NotRequired[NumericInput]
+    minimum_trade: NotRequired[NumericInput]
+    external_accounts: NotRequired[list[ExternalAccountConfig]]
+    targets: NotRequired[object]
+
+
+def load_config(path: str) -> RebalanceConfig:
     """Load a YAML mapping from an explicitly YAML-named config file."""
     if not path.lower().endswith((".yaml", ".yml")):
         raise ValueError("config path must end in .yaml or .yml")
     with open(path, encoding="utf-8") as stream:
-        config = yaml.safe_load(stream)
-    if not isinstance(config, dict):
+        raw_config: object = yaml.safe_load(stream)
+    if not isinstance(raw_config, dict):
         raise ValueError("config must be a YAML mapping")
-    return config
+    # PyYAML has no schema facility. This cast is confined to the deserialization
+    # boundary; callers use the explicit configuration schema above.
+    return cast(RebalanceConfig, raw_config)
 
 
 def decimal(value: object) -> Decimal:
@@ -26,7 +65,7 @@ def decimal(value: object) -> Decimal:
     return Decimal(str(value).replace("$", "").replace(",", ""))
 
 
-def configured_account_numbers(config: Mapping[str, Any]) -> list[str]:
+def configured_account_numbers(config: AccountSelectionConfig) -> list[str]:
     """Return configured brokerage accounts from the plural config field."""
     if "account_number" in config:
         raise ValueError(
@@ -95,9 +134,7 @@ def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
     if any(target.weight is None for target in variable):
         missing = ", ".join(target.name for target in variable if target.weight is None)
         raise ValueError(f"classes without target_amount require weight: {missing}")
-    variable_weight = sum(
-        (target.weight or Decimal(0) for target in variable), Decimal(0)
-    )
+    variable_weight = sum((_required_weight(target) for target in variable), Decimal(0))
     if variable and variable_weight <= 0:
         raise ValueError("percentage-targeted class weights must total more than zero")
     if len(variable) == len(active) and abs(variable_weight - Decimal(1)) > Decimal("0.000001"):
@@ -154,7 +191,7 @@ def calculate(
         if not target.ignore and target.target_amount is None
     ]
     variable_weight = sum(
-        (target.weight or Decimal(0) for target in variable_targets), Decimal(0)
+        (_required_weight(target) for target in variable_targets), Decimal(0)
     )
     if not variable_targets and remaining_target != 0:
         raise ValueError(
@@ -184,7 +221,7 @@ def calculate(
             continue
         current = current_by_class[target.name]
         desired = (target.target_amount if target.target_amount is not None else
-                   remaining_target * (target.weight or Decimal(0)) / variable_weight)
+                   remaining_target * _required_weight(target) / variable_weight)
         amount = desired - current
         if abs(amount) < minimum_trade:
             amount = Decimal(0)
@@ -205,6 +242,12 @@ def calculate(
             item.asset_class,
         ),
     )
+
+
+def _required_weight(target: ClassTarget) -> Decimal:
+    if target.weight is None:
+        raise ValueError(f"class {target.name} requires a weight")
+    return target.weight
 
 
 def calculate_cash(

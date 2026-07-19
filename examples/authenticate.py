@@ -52,7 +52,12 @@ def main() -> int:
     client_id = str(registration["client_id"])
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(32)
-    scopes = resource_metadata.get("scopes_supported", ["internal"])
+    raw_scopes = resource_metadata.get("scopes_supported", ["internal"])
+    if not isinstance(raw_scopes, list) or not all(
+        isinstance(scope, str) for scope in raw_scopes
+    ):
+        raise OAuthError("protected-resource metadata has invalid scopes_supported")
+    scopes: list[str] = raw_scopes
     url = authorization_url(
         authorization_metadata, client_id=client_id, redirect_uri=redirect_uri,
         resource=str(resource_metadata.get("resource", args.endpoint)), state=state,
