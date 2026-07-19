@@ -1,5 +1,6 @@
-load("@pre-commit//pre-commit:defs.bzl", "pre_commit")
 load("@pre-commit//pre-commit/hook:defs.bzl", "pre_commit_hook")
+load("@pre-commit//pre-commit/install:defs.bzl", "pre_commit_install")
+load("@pre-commit//pre-commit/run:defs.bzl", "pre_commit_run")
 load("@rules_python//python:defs.bzl", "py_binary", "py_test")
 
 py_binary(
@@ -32,7 +33,18 @@ py_test(
     deps = ["@pip//detect_secrets"],
 )
 
-pre_commit(
-    name = "hooks",
-    srcs = [":detect-secrets"],
+pre_commit_install(
+    name = "install",
+    src = "//:.pre-commit-config.yaml",
+)
+
+pre_commit_run(
+    name = "run",
+    src = "//:.pre-commit-config.yaml",
+)
+
+pre_commit_run(
+    name = "all",
+    src = "//:.pre-commit-config.yaml",
+    args = ["--all-files"],
 )

@@ -1,0 +1,14 @@
+minimum_pre_commit_version: 2.18.0
+default_install_hook_types:
+  - pre-commit
+repos:
+  - repo: local
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        description: Prevents secrets from being committed.
+        language: system
+        require_serial: true
+        stages:
+          - pre-commit
+        entry: bazel run --config=pre-commit -- //hooks:detect-secrets

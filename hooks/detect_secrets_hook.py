@@ -19,4 +19,7 @@ if __name__ == "__main__":
         for filename in violations:
             print(f"Robinhood account number found: {filename}", file=sys.stderr)
         sys.exit(1)
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main([
+        "--disable-filter", "detect_secrets.filters.common.is_invalid_file",
+        *sys.argv[1:],
+    ]))
