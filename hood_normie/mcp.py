@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 import uuid
 from collections.abc import Mapping
+from hood_normie.types import JsonObject, JsonValue, is_json_value
 
 
 class McpError(RuntimeError):
@@ -30,7 +31,9 @@ class RobinhoodMcpClient:
         })
         self._notify("notifications/initialized", {})
 
-    def call_tool(self, name: str, arguments: Mapping[str, object] | None = None) -> object:
+    def call_tool(
+        self, name: str, arguments: Mapping[str, JsonValue] | None = None
+    ) -> JsonValue:
         result = self._rpc("tools/call", {"name": name, "arguments": dict(arguments or {})})
         if result.get("isError"):
             raise McpError(f"Robinhood tool {name} failed: {result}")
@@ -49,30 +52,35 @@ class RobinhoodMcpClient:
                     continue
                 try:
                     parsed: object = json.loads(text)
+                    if not is_json_value(parsed):
+                        raise McpError("MCP tool text is not valid JSON data")
                     return parsed
                 except json.JSONDecodeError:
                     return text
         return result
 
-    def _rpc(self, method: str, params: Mapping[str, object]) -> Mapping[str, object]:
+    def _rpc(self, method: str, params: Mapping[str, JsonValue]) -> JsonObject:
         self._request_id += 1
         response = self._post({
             "jsonrpc": "2.0", "id": self._request_id,
-            "method": method, "params": params,
+            "method": method, "params": dict(params),
         })
         if "error" in response:
             raise McpError(f"MCP {method} failed: {response['error']}")
         result = response.get("result", {})
-        if not isinstance(result, Mapping):
+        if not isinstance(result, dict):
             raise McpError(f"MCP {method} returned a non-object result")
         return result
 
-    def _notify(self, method: str, params: Mapping[str, object]) -> None:
-        self._post({"jsonrpc": "2.0", "method": method, "params": params}, notification=True)
+    def _notify(self, method: str, params: Mapping[str, JsonValue]) -> None:
+        self._post(
+            {"jsonrpc": "2.0", "method": method, "params": dict(params)},
+            notification=True,
+        )
 
     def _post(
-        self, payload: Mapping[str, object], notification: bool = False
-    ) -> Mapping[str, object]:
+        self, payload: Mapping[str, JsonValue], notification: bool = False
+    ) -> JsonObject:
         if self.verbose:
             print(f"\n>>> MCP POST {self.endpoint}", file=sys.stderr)
             print(json.dumps(payload, indent=2, default=str), file=sys.stderr)
@@ -101,7 +109,7 @@ class RobinhoodMcpClient:
                 if self.verbose:
                     print(f"<<< MCP HTTP {response.status}", file=sys.stderr)
                     print(json.dumps(parsed, indent=2, default=str), file=sys.stderr)
-                if not isinstance(parsed, Mapping):
+                if not is_json_value(parsed) or not isinstance(parsed, dict):
                     raise McpError("MCP response body must be a JSON object")
                 return parsed
         except urllib.error.HTTPError as error:

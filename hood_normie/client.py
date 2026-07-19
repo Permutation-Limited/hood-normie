@@ -1,10 +1,33 @@
 """High-level, normalized client for Robinhood's Trading MCP tools."""
 
-from typing import Any, Iterable
+from typing import Iterable, NotRequired, TypedDict
 
 from hood_normie.accounts import select_account
 from hood_normie.mcp import RobinhoodMcpClient
 from hood_normie.oauth import DEFAULT_ENDPOINT, load_access_token
+from hood_normie.types import JsonObject, JsonValue, MoneyValue
+
+
+class NormalizedPosition(TypedDict):
+    symbol: str
+    quantity: MoneyValue
+    price: MoneyValue
+
+
+class NormalizedAccount(TypedDict):
+    net_liquidation_value: MoneyValue
+    cash: MoneyValue
+    positions: list[NormalizedPosition]
+    account_number: NotRequired[str]
+
+
+class NormalizedAccountWithPrices(NormalizedAccount):
+    prices: dict[str, MoneyValue]
+
+
+class PortfolioSnapshot(TypedDict):
+    accounts: list[NormalizedAccount]
+    prices: dict[str, MoneyValue]
 
 
 class RobinhoodClient:
@@ -27,32 +50,34 @@ class RobinhoodClient:
     def connect(self) -> None:
         self.mcp.connect()
 
-    def get_accounts(self) -> Any:
+    def get_accounts(self) -> JsonValue:
         return self.mcp.call_tool("get_accounts")
 
-    def get_portfolio(self, account_number: str) -> Any:
+    def get_portfolio(self, account_number: str) -> JsonValue:
         return self.mcp.call_tool("get_portfolio", {"account_number": account_number})
 
-    def get_equity_positions(self, account_number: str) -> Any:
+    def get_equity_positions(self, account_number: str) -> JsonValue:
         return self.mcp.call_tool(
             "get_equity_positions", {"account_number": account_number}
         )
 
-    def get_equity_quotes(self, symbols: Iterable[str]) -> Any:
+    def get_equity_quotes(self, symbols: Iterable[str]) -> JsonValue:
+        symbol_values: list[JsonValue] = []
+        symbol_values.extend(sorted(set(symbols)))
         return self.mcp.call_tool(
-            "get_equity_quotes", {"symbols": sorted(set(symbols))}
+            "get_equity_quotes", {"symbols": symbol_values}
         )
 
     def fetch_portfolios(
         self, account_numbers: Iterable[str] = (), quote_symbols: Iterable[str] = ()
-    ) -> dict[str, Any]:
+    ) -> PortfolioSnapshot:
         """Fetch and normalize multiple accounts plus a shared live price map."""
         self.connect()
         selected = [str(value) for value in account_numbers]
         if not selected:
             selected = [select_account(self.get_accounts())]
 
-        raw_accounts = []
+        raw_accounts: list[tuple[str, JsonValue, JsonValue]] = []
         held_symbols: set[str] = set()
         for account_number in selected:
             portfolio = self.get_portfolio(account_number)
@@ -61,18 +86,21 @@ class RobinhoodClient:
             held_symbols.update(position_symbols(positions))
 
         quotes = self.get_equity_quotes(set(quote_symbols) | held_symbols)
-        normalized_accounts = []
+        normalized_accounts: list[NormalizedAccount] = []
         for account_number, portfolio, positions in raw_accounts:
             normalized = normalize_account(portfolio, positions, quotes)
-            normalized.pop("prices", None)
-            normalized["account_number"] = account_number
-            normalized_accounts.append(normalized)
+            normalized_accounts.append({
+                "net_liquidation_value": normalized["net_liquidation_value"],
+                "cash": normalized["cash"],
+                "positions": normalized["positions"],
+                "account_number": account_number,
+            })
         return {"accounts": normalized_accounts, "prices": normalize_quotes(quotes)}
 
 
 def normalize_account(
-    portfolio: Any, positions: Any, quotes: Any
-) -> dict[str, Any]:
+    portfolio: JsonValue, positions: JsonValue, quotes: JsonValue
+) -> NormalizedAccountWithPrices:
     """Normalize Robinhood tool responses into stable JSON-compatible fields."""
     value_fields = (
         "net_liquidation_value", "netLiquidationValue", "net_liquidation",
@@ -101,8 +129,8 @@ def normalize_account(
 
     quote_map = normalize_quotes(quotes)
     price_fields = price_field_names()
-    normalized_positions = []
-    missing_prices = []
+    normalized_positions: list[NormalizedPosition] = []
+    missing_prices: list[str] = []
     for position in position_records(positions):
         symbol = str(first(position, "symbol") or "").upper()
         quantity = money_value(first(position, "quantity", "shares"))
@@ -129,8 +157,8 @@ def normalize_account(
     }
 
 
-def normalize_quotes(quotes: Any) -> dict[str, Any]:
-    quote_map = {}
+def normalize_quotes(quotes: JsonValue) -> dict[str, MoneyValue]:
+    quote_map: dict[str, MoneyValue] = {}
     fields = price_field_names()
     for quote in find_records_with_fields(quotes, ("symbol",), fields):
         symbol = first(quote, "symbol")
@@ -147,11 +175,11 @@ def price_field_names() -> tuple[str, ...]:
     )
 
 
-def first(record: dict[str, Any], *keys: str) -> Any:
+def first(record: JsonObject, *keys: str) -> JsonValue:
     return next((record[key] for key in keys if record.get(key) is not None), None)
 
 
-def find_record_with_field(payload: Any, fields: tuple[str, ...]) -> dict[str, Any] | None:
+def find_record_with_field(payload: JsonValue, fields: tuple[str, ...]) -> JsonObject | None:
     if isinstance(payload, dict):
         if any(payload.get(field) is not None for field in fields):
             return payload
@@ -168,9 +196,9 @@ def find_record_with_field(payload: Any, fields: tuple[str, ...]) -> dict[str, A
 
 
 def find_records_with_fields(
-    payload: Any, required: tuple[str, ...], alternatives: tuple[str, ...]
-) -> list[dict[str, Any]]:
-    found: list[dict[str, Any]] = []
+    payload: JsonValue, required: tuple[str, ...], alternatives: tuple[str, ...]
+) -> list[JsonObject]:
+    found: list[JsonObject] = []
     if isinstance(payload, dict):
         if (all(payload.get(field) is not None for field in required)
                 and any(payload.get(field) is not None for field in alternatives)):
@@ -184,24 +212,26 @@ def find_records_with_fields(
     return found
 
 
-def position_records(payload: Any) -> list[dict[str, Any]]:
+def position_records(payload: JsonValue) -> list[JsonObject]:
     return find_records_with_fields(payload, ("symbol",), ("quantity", "shares"))
 
 
-def position_symbols(payload: Any) -> list[str]:
+def position_symbols(payload: JsonValue) -> list[str]:
     return sorted({
         str(first(position, "symbol")).upper()
         for position in position_records(payload) if first(position, "symbol")
     })
 
 
-def money_value(value: Any) -> Any:
+def money_value(value: JsonValue) -> MoneyValue | None:
     if isinstance(value, dict):
-        return first(value, "amount", "value", "decimal", "units")
-    return value
+        value = first(value, "amount", "value", "decimal", "units")
+    if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+        return value
+    return None
 
 
-def response_shape(payload: Any, depth: int = 0) -> Any:
+def response_shape(payload: JsonValue, depth: int = 0) -> JsonValue:
     """Return keys and container types without leaking financial values."""
     if depth >= 5:
         return "..."

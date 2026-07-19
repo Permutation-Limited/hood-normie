@@ -15,6 +15,7 @@ py_library(
         "client.py",
         "mcp.py",
         "oauth.py",
+        "types.py",
     ],
 )
 

@@ -1,9 +1,11 @@
 """Parse and select accounts from Robinhood MCP responses."""
 
-from typing import Any
+from hood_normie.types import JsonObject, JsonValue, is_json_value
 
 
-def select_account(payload: Any) -> str:
+def select_account(payload: object) -> str:
+    if not is_json_value(payload):
+        raise ValueError("account payload is not valid JSON data")
     accounts = account_records(payload)
     numbered = [(account, account_number(account)) for account in accounts]
     selectable = [(account, number) for account, number in numbered if number is not None]
@@ -30,16 +32,18 @@ def select_account(payload: Any) -> str:
     raise SystemExit("\n".join(lines))
 
 
-def account_records(payload: Any) -> list[dict[str, Any]]:
+def account_records(payload: object) -> list[JsonObject]:
     """Extract account objects through common MCP response wrappers."""
+    if not is_json_value(payload):
+        raise ValueError("account payload is not valid JSON data")
     wrappers = {"accounts", "results", "items", "data"}
     identifier_fields = {
         "account_number", "accountNumber", "number", "account_id", "accountId",
         "nickname", "display_name", "displayName", "account_type", "accountType",
     }
-    found: list[dict[str, Any]] = []
+    found: list[JsonObject] = []
 
-    def visit(value: Any, inside_wrapper: bool = False) -> None:
+    def visit(value: JsonValue, inside_wrapper: bool = False) -> None:
         if isinstance(value, list):
             for item in value:
                 visit(item, inside_wrapper)
@@ -57,14 +61,15 @@ def account_records(payload: Any) -> list[dict[str, Any]]:
     return found
 
 
-def account_number(account: dict[str, Any]) -> Any:
-    return first(
+def account_number(account: JsonObject) -> str | int | float | None:
+    value = first(
         account, "account_number", "accountNumber", "number",
         "brokerage_account_number", "brokerageAccountNumber",
     )
+    return value if isinstance(value, (str, int, float)) and not isinstance(value, bool) else None
 
 
-def account_name(account: dict[str, Any]) -> str:
+def account_name(account: JsonObject) -> str:
     value = first(
         account, "nickname", "display_name", "displayName", "name",
         "account_type", "accountType", "type",
@@ -72,5 +77,5 @@ def account_name(account: dict[str, Any]) -> str:
     return str(value) if value is not None else "Unnamed account"
 
 
-def first(record: dict[str, Any], *keys: str) -> Any:
+def first(record: JsonObject, *keys: str) -> JsonValue:
     return next((record[key] for key in keys if record.get(key) is not None), None)

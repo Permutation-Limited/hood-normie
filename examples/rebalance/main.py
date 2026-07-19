@@ -5,14 +5,13 @@ from decimal import Decimal
 import json
 import os
 import sys
-from typing import Any
-
 from examples.paths import workspace_path
 from examples.rebalance.core import (
     ClassTarget, Position, calculate, calculate_cash, configured_account_numbers,
     decimal, load_config,
 )
 from hood_normie import RobinhoodClient
+from hood_normie.client import NormalizedPosition, PortfolioSnapshot
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 
 
@@ -163,7 +162,7 @@ def main() -> int:
 
 
 def fetch_portfolios(endpoint: str, accounts: list[str], symbols: list[str],
-                     token_file: str, verbose: bool = False) -> dict[str, Any]:
+                     token_file: str, verbose: bool = False) -> PortfolioSnapshot:
     token = os.environ.get("ROBINHOOD_MCP_TOKEN")
     client = (RobinhoodClient(token, endpoint=endpoint, verbose=verbose) if token else
               RobinhoodClient.from_token_file(
@@ -172,7 +171,7 @@ def fetch_portfolios(endpoint: str, accounts: list[str], symbols: list[str],
     return client.fetch_portfolios(accounts, symbols)
 
 
-def _parse_positions(items: list[dict[str, Any]]) -> dict[str, Position]:
+def _parse_positions(items: list[NormalizedPosition]) -> dict[str, Position]:
     result: dict[str, Position] = {}
     for item in items:
         symbol = item["symbol"].upper()
@@ -190,11 +189,18 @@ def _parse_positions(items: list[dict[str, Any]]) -> dict[str, Position]:
 def _aggregate_positions(
     accounts: list[tuple[str, dict[str, Position], Decimal]]
 ) -> dict[str, Position]:
-    items = [
-        {"symbol": position.symbol, "quantity": position.quantity, "price": position.price}
-        for _, positions, _ in accounts for position in positions.values()
-    ]
-    return _parse_positions(items)
+    result: dict[str, Position] = {}
+    for _, positions, _ in accounts:
+        for symbol, position in positions.items():
+            existing = result.get(symbol)
+            if existing is None:
+                result[symbol] = position
+                continue
+            quantity = existing.quantity + position.quantity
+            value = existing.market_value + position.market_value
+            price = value / quantity if quantity else position.price
+            result[symbol] = Position(symbol, quantity, price)
+    return result
 
 
 def _print_asset_table(
