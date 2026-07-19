@@ -21,7 +21,7 @@ automatically uses the required Bazel version.
 
 ## Examples
 
-Authenticate interactively:
+Authenticate interactively via web browser. This stores credentials in a git-ignored file `.robinhood-mcp-token.json`, which is read by other examples:
 
 ```sh
 bazel run //examples:authenticate
@@ -53,11 +53,6 @@ BUY    bonds        $   1,800.00 $  18,000.00 $  19,800.00
 SELL   stocks       $     800.00 $  80,000.00 $  79,200.00
 SELL   cash         $   1,000.00 $  -1,000.00 $  -2,000.00
 ```
-
-In a terminal, section headings are bold cyan, `BUY` rows are green, `SELL`
-rows are red, warnings are yellow, and totals are emphasized. Markdown code
-blocks cannot portably reproduce ANSI terminal colors, so the example above
-shows the same layout in plain text.
 
 The recommendations are class-level dollar adjustments only. The example is
 read-only and does not choose a security or place an order.
