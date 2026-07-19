@@ -27,6 +27,12 @@ Authenticate interactively via web browser. This stores credentials in a git-ign
 bazel run //examples:authenticate
 ```
 
+List the Robinhood accounts available to the authenticated user:
+
+```sh
+bazel run //examples:list_accounts
+```
+
 Run the composite portfolio rebalancer:
 
 ```sh

@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -19,5 +19,23 @@ py_binary(
     deps = [
         ":paths",
         "//hood_normie",
+    ],
+)
+
+py_binary(
+    name = "list_accounts",
+    srcs = ["list_accounts.py"],
+    main = "list_accounts.py",
+    deps = [
+        ":paths",
+        "//hood_normie",
+    ],
+)
+
+py_test(
+    name = "list_accounts_test",
+    srcs = ["list_accounts_test.py"],
+    deps = [
+        ":list_accounts",
     ],
 )

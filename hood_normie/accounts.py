@@ -39,7 +39,11 @@ def account_records(payload: object) -> list[JsonObject]:
     wrappers = {"accounts", "results", "items", "data"}
     identifier_fields = {
         "account_number", "accountNumber", "number", "account_id", "accountId",
-        "nickname", "display_name", "displayName", "account_type", "accountType",
+        "brokerage_account_number", "brokerageAccountNumber", "nickname",
+        "display_name", "displayName", "account_type", "accountType", "type",
+        "tax_status", "taxStatus", "tax_type", "taxType",
+        "retirement_account_type", "retirementAccountType",
+        "brokerage_account_type", "brokerageAccountType",
     }
     found: list[JsonObject] = []
 
