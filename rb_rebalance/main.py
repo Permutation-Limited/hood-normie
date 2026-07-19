@@ -168,6 +168,8 @@ def main() -> int:
     if not args.json:
         for label, held_positions, account_cash in account_positions:
             _print_asset_table(label, held_positions, account_cash, asset_classes)
+        print("COMPOSITE PORTFOLIO")
+        print(f"{'TOTAL':<48}${net_liquidation_value:>11,.2f}\n")
     unclassified = sorted(
         (position for symbol, position in positions.items() if symbol not in asset_classes),
         key=lambda position: position.symbol,

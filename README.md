@@ -121,7 +121,8 @@ prices from Robinhood quotes during live runs or from the snapshot's `prices` ma
 offline. External asset value and cash are added to composite net liquidation
 value, and external cash is included in composite current cash. Symbols use the
 same top-level `assets` mapping as Robinhood holdings. Each account table shows
-its cash and total value.
+its cash and total value. After the individual account tables, a composite
+portfolio `TOTAL` shows the combined net liquidation value across all accounts.
 
 ## Run offline
 
