@@ -12,7 +12,7 @@ from hood_normie.accounts import select_account
 class CalculateTest(unittest.TestCase):
     def test_rebalances_to_positive_cash(self):
         result = calculate(
-            net_liquidation_value=Decimal("10000"),
+            current_cash=Decimal("1000"),
             target_cash=Decimal("1000"),
             targets=[ClassTarget("stocks", Decimal("0.60")),
                      ClassTarget("bonds", Decimal("0.40"))],
@@ -27,7 +27,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_negative_cash_creates_margin_exposure(self):
         result = calculate(
-            net_liquidation_value=Decimal("10000"), target_cash=Decimal("-2000"),
+            current_cash=Decimal("10000"), target_cash=Decimal("-2000"),
             targets=[ClassTarget("stocks", Decimal("0.75")),
                      ClassTarget("bonds", Decimal("0.25"))],
             asset_classes={"VTI": "stocks", "BND": "bonds"}, positions={},
@@ -37,7 +37,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_minimum_trade_is_suppressed(self):
         result = calculate(
-            net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
+            current_cash=Decimal("1"), target_cash=Decimal(0),
             targets=[ClassTarget("stocks", Decimal(1))],
             asset_classes={"VTI": "stocks"},
             positions={"VTI": Position("VTI", Decimal("0.99"), Decimal("100"))},
@@ -47,13 +47,13 @@ class CalculateTest(unittest.TestCase):
 
     def test_weights_must_sum_to_one(self):
         with self.assertRaisesRegex(ValueError, "sum to 1"):
-            calculate(net_liquidation_value=Decimal(10), target_cash=Decimal(0),
+            calculate(current_cash=Decimal(10), target_cash=Decimal(0),
                       targets=[ClassTarget("stocks", Decimal("0.9"))],
                       asset_classes={"VTI": "stocks"}, positions={})
 
     def test_aggregates_multiple_symbols_into_one_class(self):
         result = calculate(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            current_cash=Decimal(0), target_cash=Decimal(0),
             targets=[ClassTarget("stocks", Decimal("0.5")),
                      ClassTarget("bonds", Decimal("0.5"))],
             asset_classes={"VTI": "stocks", "VXUS": "stocks", "BND": "bonds"},
@@ -67,9 +67,27 @@ class CalculateTest(unittest.TestCase):
                          {"bonds": Decimal("500.00"), "stocks": Decimal("500.00")})
         self.assertTrue(all(r.action == "HOLD" for r in result))
 
+    def test_unchanged_cash_makes_active_trades_cash_neutral(self):
+        result = calculate(
+            current_cash=Decimal("-1000"), target_cash=Decimal("-1000"),
+            targets=[ClassTarget("stocks", Decimal("0.8")),
+                     ClassTarget("bonds", Decimal("0.2")),
+                     ClassTarget("play", ignore=True)],
+            asset_classes={"VTI": "stocks", "BND": "bonds", "PLAY": "play"},
+            positions={
+                "VTI": Position("VTI", Decimal(1), Decimal("803895.51")),
+                "BND": Position("BND", Decimal(1), Decimal("238243.31")),
+                "PLAY": Position("PLAY", Decimal(1), Decimal("9134.74")),
+            },
+        )
+        active_trade_total = sum(
+            (item.amount for item in result if not item.ignored), Decimal(0)
+        )
+        self.assertEqual(active_trade_total, Decimal("0.00"))
+
     def test_unmapped_symbol_is_ignored_from_balance_and_allocation_base(self):
         result = calculate(
-            net_liquidation_value=Decimal("100"), target_cash=Decimal(0),
+            current_cash=Decimal(0), target_cash=Decimal(0),
             targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
             positions={"TSLA": Position("TSLA", Decimal(1), Decimal("100"))},
         )
@@ -79,7 +97,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_explicit_ignored_class_is_removed_from_allocation_base(self):
         result = calculate(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal("100"),
+            current_cash=Decimal("100"), target_cash=Decimal("100"),
             targets=[ClassTarget("stocks", Decimal(1)),
                      ClassTarget("legacy", ignore=True)],
             asset_classes={"VTI": "stocks", "OLD": "legacy"},
@@ -97,7 +115,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_unclassified_assets_get_informational_row(self):
         result = calculate(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            current_cash=Decimal(0), target_cash=Decimal(0),
             targets=[ClassTarget("stocks", Decimal(1))], asset_classes={},
             positions={"OTHER": Position("OTHER", Decimal(2), Decimal("100"))},
         )
@@ -109,7 +127,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_ignored_and_unclassified_rows_are_last(self):
         result = calculate(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            current_cash=Decimal(0), target_cash=Decimal(0),
             targets=[
                 ClassTarget("stocks", Decimal(1)),
                 ClassTarget("legacy_z", ignore=True),
@@ -129,7 +147,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_fixed_dollar_target_overrides_weight(self):
         result = calculate(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal("100"),
+            current_cash=Decimal("300"), target_cash=Decimal("100"),
             targets=[
                 ClassTarget("stocks", Decimal("0.8")),
                 ClassTarget("bonds", Decimal("0.2"), Decimal("300")),
@@ -148,7 +166,7 @@ class CalculateTest(unittest.TestCase):
 
     def test_multiple_percentage_classes_split_remainder_proportionally(self):
         result = calculate(
-            net_liquidation_value=Decimal("1000"), target_cash=Decimal(0),
+            current_cash=Decimal("1000"), target_cash=Decimal(0),
             targets=[
                 ClassTarget("us_stocks", Decimal("0.6")),
                 ClassTarget("intl_stocks", Decimal("0.2")),

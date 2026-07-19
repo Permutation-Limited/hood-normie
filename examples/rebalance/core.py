@@ -95,7 +95,7 @@ def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
 
 def calculate(
     *,
-    net_liquidation_value: Decimal,
+    current_cash: Decimal,
     target_cash: Decimal,
     targets: Iterable[ClassTarget],
     asset_classes: Mapping[str, str],
@@ -104,8 +104,10 @@ def calculate(
 ) -> list[Recommendation]:
     """Return class-level dollar deltas needed to reach the allocation.
 
-    Weights apply to invested value, not net liquidation value. Thus a negative
-    target_cash deliberately makes invested value greater than account equity.
+    Weights apply to invested value, not account equity. Account equity is
+    derived from the same marked positions and reported cash used by the
+    recommendations, so the resulting trades reconcile to the cash change.
+    Thus a negative target_cash deliberately creates margin exposure.
     """
     checked_targets = validate_targets(targets)
     class_names = {target.name for target in checked_targets}
@@ -115,10 +117,14 @@ def calculate(
          if asset_classes.get(symbol) in ignored_classes or symbol not in asset_classes),
         Decimal(0),
     )
-    invested_target = net_liquidation_value - target_cash - ignored_value
+    marked_position_value = sum(
+        (position.market_value for position in positions.values()), Decimal(0)
+    )
+    marked_account_equity = marked_position_value + current_cash
+    invested_target = marked_account_equity - target_cash - ignored_value
     if invested_target < 0:
         raise ValueError(
-            "target cash plus ignored assets cannot exceed net liquidation value"
+            "target cash plus ignored assets cannot exceed marked account equity"
         )
 
     fixed_total = sum(

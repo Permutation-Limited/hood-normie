@@ -78,14 +78,12 @@ def main() -> int:
     )
     robinhood_accounts = portfolio_data["accounts"]
     account_positions: list[tuple[str, dict[str, Position], Decimal]] = []
-    net_liquidation_value = Decimal(0)
     current_cash = Decimal(0)
     for index, account in enumerate(robinhood_accounts, start=1):
         label = str(account.get("account_number") or f"Robinhood {index}")
         parsed = _parse_positions(account.get("positions", []))
         account_cash = decimal(account["cash"])
         account_positions.append((f"ROBINHOOD ACCOUNT {label}", parsed, account_cash))
-        net_liquidation_value += decimal(account["net_liquidation_value"])
         current_cash += account_cash
 
     prices = {
@@ -107,16 +105,17 @@ def main() -> int:
         account_positions.append(
             (f"EXTERNAL ACCOUNT {external['name']}", parsed, external_cash)
         )
-        net_liquidation_value += sum(
-            (position.market_value for position in parsed.values()), Decimal(0)
-        ) + external_cash
         current_cash += external_cash
 
     positions = _aggregate_positions(account_positions)
+    marked_account_equity = (
+        sum((position.market_value for position in positions.values()), Decimal(0))
+        + current_cash
+    )
     target_cash = decimal(config.get("target_cash", 0))
     minimum_trade = decimal(config.get("minimum_trade", 0))
     recommendations = calculate(
-        net_liquidation_value=net_liquidation_value,
+        current_cash=current_cash,
         target_cash=target_cash,
         targets=targets,
         asset_classes=asset_classes,
@@ -133,7 +132,7 @@ def main() -> int:
         for label, held_positions, account_cash in account_positions:
             _print_asset_table(label, held_positions, account_cash, asset_classes)
         print("COMPOSITE PORTFOLIO")
-        print(f"{'TOTAL':<48}${net_liquidation_value:>11,.2f}\n")
+        print(f"{'TOTAL':<48}${marked_account_equity:>11,.2f}\n")
     unclassified = sorted(
         (position for symbol, position in positions.items() if symbol not in asset_classes),
         key=lambda position: position.symbol,

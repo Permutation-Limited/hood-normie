@@ -13,7 +13,8 @@ buying power, taxes, and unsettled funds yourself.
 Class weights sum to 1 and apply to invested assets:
 
 ```
-invested target = net liquidation value - target cash
+marked equity   = marked position values + broker-reported cash
+invested target = marked equity - target cash
 class target    = invested target * class weight
 trade amount    = class target - current class market value
 ```
@@ -66,8 +67,14 @@ ignored classes, the implicit `unclassified` class, and finally `cash`.
 The active allocation base is:
 
 ```text
-net liquidation value - target cash - ignored/unclassified asset value
+marked position values + broker-reported cash - target cash
+    - ignored/unclassified asset value
 ```
+
+The marked position values used in this calculation are the same quantity-times-
+quote values shown in the account tables. This keeps the trades self-financing
+even when Robinhood's separately reported net liquidation value differs from
+those quotes.
 
 The recommendation table also contains an implicit `cash` class. Current cash is
 read directly from Robinhood's `get_portfolio` `cash` field; it is not inferred
@@ -109,10 +116,10 @@ one run.
 from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
 `quantity`. An optional `cash` field defaults to zero. The program obtains current
 prices from Robinhood quotes. External asset value and cash are added to composite
-net liquidation value, and external cash is included in composite current cash.
+marked equity, and external cash is included in composite current cash.
 Symbols use the same top-level `assets` mapping as Robinhood holdings. Each
 account table shows its cash and total value. After the individual account
-tables, a composite portfolio `TOTAL` shows the combined net liquidation value.
+tables, a composite portfolio `TOTAL` shows the combined marked equity.
 
 ## Configure and run
 
