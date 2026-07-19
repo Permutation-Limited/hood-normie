@@ -43,10 +43,10 @@ class RobinhoodClient:
             "get_equity_quotes", {"symbols": sorted(set(symbols))}
         )
 
-    def fetch_snapshot(
+    def fetch_portfolios(
         self, account_numbers: Iterable[str] = (), quote_symbols: Iterable[str] = ()
     ) -> dict[str, Any]:
-        """Fetch and normalize multiple accounts plus a shared price map."""
+        """Fetch and normalize multiple accounts plus a shared live price map."""
         self.connect()
         selected = [str(value) for value in account_numbers]
         if not selected:
@@ -63,14 +63,14 @@ class RobinhoodClient:
         quotes = self.get_equity_quotes(set(quote_symbols) | held_symbols)
         normalized_accounts = []
         for account_number, portfolio, positions in raw_accounts:
-            normalized = normalize_account_snapshot(portfolio, positions, quotes)
+            normalized = normalize_account(portfolio, positions, quotes)
             normalized.pop("prices", None)
             normalized["account_number"] = account_number
             normalized_accounts.append(normalized)
         return {"accounts": normalized_accounts, "prices": normalize_quotes(quotes)}
 
 
-def normalize_account_snapshot(
+def normalize_account(
     portfolio: Any, positions: Any, quotes: Any
 ) -> dict[str, Any]:
     """Normalize Robinhood tool responses into stable JSON-compatible fields."""

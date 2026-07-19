@@ -1,11 +1,11 @@
 import unittest
 
-from hood_mcp_py.client import normalize_account_snapshot, normalize_quotes
+from hood_mcp_py.client import normalize_account, normalize_quotes
 
 
 class ClientNormalizationTest(unittest.TestCase):
     def test_normalizes_nested_portfolio_positions_and_quotes(self):
-        result = normalize_account_snapshot(
+        result = normalize_account(
             {"data": {"total_value": "1000", "cash": "100"}},
             {"data": {"positions": [{"symbol": "VTI", "quantity": "2"}]}},
             {"data": {"quotes": [{"symbol": "VTI", "last_trade_price": "250"}]}},
@@ -25,4 +25,3 @@ class ClientNormalizationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -82,7 +82,7 @@ read directly from Robinhood's `get_portfolio` `cash` field; it is not inferred
 from portfolio value and positions. For this row, `BUY cash` means cash should
 increase and `SELL cash` means cash should decrease; the amount is the difference
 between broker-reported cash and `target_cash`. Cash is included in `--json`
-output and saved snapshots. Older snapshots without `cash` must be refreshed.
+output.
 
 ### Fixed dollar class targets
 
@@ -117,25 +117,22 @@ one run.
 `external_accounts` contains named accounts whose positions are not retrieved
 from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
 `quantity`. An optional `cash` field defaults to zero. The program obtains current
-prices from Robinhood quotes during live runs or from the snapshot's `prices` map
-offline. External asset value and cash are added to composite net liquidation
-value, and external cash is included in composite current cash. Symbols use the
-same top-level `assets` mapping as Robinhood holdings. Each account table shows
-its cash and total value. After the individual account tables, a composite
-portfolio `TOTAL` shows the combined net liquidation value across all accounts.
+prices from Robinhood quotes. External asset value and cash are added to composite
+net liquidation value, and external cash is included in composite current cash.
+Symbols use the same top-level `assets` mapping as Robinhood holdings. Each
+account table shows its cash and total value. After the individual account
+tables, a composite portfolio `TOTAL` shows the combined net liquidation value.
 
-## Run offline
+## Configure and run
 
-Create local working files from the checked-in examples:
+Create a local config from the checked-in example:
 
 ```sh
 cp examples/rebalance/config.example.json config.json
-cp examples/rebalance/snapshot.example.json snapshot.json
 ```
 
-`config.json` and `snapshot.json` are ignored by Git, while the example files
-remain checked in as documentation. Edit `config.json` with your actual target
-allocation. You may also store Robinhood account numbers in this ignored file:
+`config.json` is ignored by Git, while the example remains checked in as
+documentation. Edit it with your actual target allocation and account numbers:
 
 ```json
 "robinhood_account_numbers": ["ACCOUNT_ONE", "ACCOUNT_TWO"]
@@ -146,18 +143,11 @@ that one field, not a complete config file. Then run:
 
 ```sh
 bazel test //...
-bazel run //examples/rebalance:rebalance -- --from-snapshot
+bazel run //examples/rebalance:rebalance
 ```
 
-The default run fetches current data from Robinhood. To run offline using
-`snapshot.json`, pass `--from-snapshot`:
-
-```sh
-bazel run //examples/rebalance:rebalance -- --from-snapshot
-```
-
-Override local paths with `--config PATH` or `--snapshot PATH`. Add `--json` for
-machine-readable output.
+Every run fetches current data from Robinhood. Override the config path with
+`--config PATH`. Add `--json` for machine-readable output.
 
 Relative paths are resolved from the workspace directory where you invoked
 `bazel run`, not from Bazel's internal runfiles directory. Absolute paths work
@@ -221,31 +211,3 @@ Verbose output goes to stderr, so `--json` stdout remains machine-readable. The
 program does not print the OAuth `Authorization` header or token. Robinhood's
 responses can contain sensitive account numbers, balances, positions, and other
 brokerage data, so review verbose output before saving or sharing it.
-
-## Create or update `snapshot.json`
-
-First authenticate as described above and make sure `config.json` maps every held
-symbol to a class. Then fetch live positions, portfolio value,
-and quotes and atomically replace the default snapshot:
-
-```sh
-bazel run //examples/rebalance:rebalance -- \
-  --save-snapshot
-```
-
-The command both prints the current rebalance plan and writes normalized broker
-data to `snapshot.json`. Use `bazel run //examples/rebalance:rebalance -- --from-snapshot` to read
-that saved data later without contacting Robinhood.
-
-To write another file, put its path after the option:
-
-```sh
-bazel run //examples/rebalance:rebalance -- --save-snapshot snapshots/2026-07-18.json \
-  --account 'AN_OPTIONAL_ONE_RUN_OVERRIDE'
-```
-
-Snapshot contents are account-sensitive because they include symbols, quantities,
-prices, and portfolio value. Only the root-level default `snapshot.json` is
-ignored automatically; add any alternate snapshot directory to `.gitignore` if
-you use one. A snapshot is a point-in-time input, so refresh it before relying on
-the recommendations.

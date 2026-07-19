@@ -4,9 +4,7 @@ import argparse
 from decimal import Decimal
 import json
 import os
-from pathlib import Path
 import sys
-import tempfile
 from typing import Any
 
 from examples.paths import workspace_path
@@ -17,24 +15,12 @@ from hood_mcp_py.oauth import DEFAULT_TOKEN_FILE, OAuthError
 
 DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
 DEFAULT_CONFIG = "config.json"
-DEFAULT_SNAPSHOT = "snapshot.json"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compute a read-only Robinhood rebalance plan")
     parser.add_argument("--config", default=DEFAULT_CONFIG,
                         help=f"target allocation JSON (default: {DEFAULT_CONFIG})")
-    parser.add_argument("--snapshot", default=DEFAULT_SNAPSHOT,
-                        help=f"offline broker snapshot JSON (default: {DEFAULT_SNAPSHOT})")
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--from-snapshot", action="store_true",
-                      help="read offline data from --snapshot instead of Robinhood")
-    mode.add_argument("--live", action="store_false", dest="from_snapshot",
-                      help=argparse.SUPPRESS)
-    parser.set_defaults(from_snapshot=False)
-    parser.add_argument("--save-snapshot", nargs="?", const=DEFAULT_SNAPSHOT,
-                        metavar="PATH",
-                        help=f"save live fetched data (default path: {DEFAULT_SNAPSHOT})")
     parser.add_argument("--account", action="append",
                         help="Robinhood account number; repeat for multiple accounts")
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
@@ -46,10 +32,7 @@ def main() -> int:
     args = parser.parse_args()
 
     args.config = workspace_path(args.config)
-    args.snapshot = workspace_path(args.snapshot)
     args.token_file = workspace_path(args.token_file)
-    if args.save_snapshot:
-        args.save_snapshot = workspace_path(args.save_snapshot)
 
     with open(args.config, encoding="utf-8") as stream:
         config = json.load(stream)
@@ -87,47 +70,26 @@ def main() -> int:
                                if config.get("account_number") else [])
     account_numbers = args.account or [str(value) for value in configured_accounts]
 
-    if args.save_snapshot and args.from_snapshot:
-        parser.error("--save-snapshot cannot be used with --from-snapshot")
-    if not args.from_snapshot:
-        snapshot = fetch_snapshot(args.endpoint, account_numbers,
-                                  sorted(set(asset_classes) | external_symbols),
-                                  args.token_file, verbose=args.verbose)
-        if args.save_snapshot:
-            save_snapshot(args.save_snapshot, snapshot)
-            print(f"Saved current Robinhood snapshot to {args.save_snapshot}", file=sys.stderr)
-    else:
-        try:
-            with open(args.snapshot, encoding="utf-8") as stream:
-                snapshot = json.load(stream)
-        except FileNotFoundError as error:
-            raise SystemExit(
-                f"snapshot not found: {args.snapshot}; copy "
-                "examples/rebalance/snapshot.example.json or run "
-                "without --from-snapshot and use --save-snapshot"
-            ) from error
-
-    robinhood_snapshots = snapshot.get("accounts")
-    if robinhood_snapshots is None:
-        # Backward compatibility for snapshots written before multi-account support.
-        robinhood_snapshots = [snapshot]
+    portfolio_data = fetch_portfolios(
+        args.endpoint, account_numbers,
+        sorted(set(asset_classes) | external_symbols),
+        args.token_file, verbose=args.verbose,
+    )
+    robinhood_accounts = portfolio_data["accounts"]
     account_positions: list[tuple[str, dict[str, Position], Decimal]] = []
     net_liquidation_value = Decimal(0)
     current_cash = Decimal(0)
-    for index, account_snapshot in enumerate(robinhood_snapshots, start=1):
-        if "cash" not in account_snapshot:
-            raise ValueError(
-                "snapshot account has no broker-reported cash value; refresh it with "
-                "--save-snapshot or add the Robinhood cash field"
-            )
-        label = str(account_snapshot.get("account_number") or f"Robinhood {index}")
-        parsed = _parse_positions(account_snapshot.get("positions", []))
-        account_cash = decimal(account_snapshot["cash"])
+    for index, account in enumerate(robinhood_accounts, start=1):
+        label = str(account.get("account_number") or f"Robinhood {index}")
+        parsed = _parse_positions(account.get("positions", []))
+        account_cash = decimal(account["cash"])
         account_positions.append((f"ROBINHOOD ACCOUNT {label}", parsed, account_cash))
-        net_liquidation_value += decimal(account_snapshot["net_liquidation_value"])
+        net_liquidation_value += decimal(account["net_liquidation_value"])
         current_cash += account_cash
 
-    prices = {key.upper(): decimal(value) for key, value in snapshot.get("prices", {}).items()}
+    prices = {
+        key.upper(): decimal(value) for key, value in portfolio_data.get("prices", {}).items()
+    }
     for external in external_accounts:
         parsed: dict[str, Position] = {}
         external_cash = decimal(external.get("cash", 0))
@@ -138,7 +100,7 @@ def main() -> int:
             price = prices.get(symbol)
             if price is None:
                 raise ValueError(
-                    f"missing quote for external asset {symbol}; refresh the snapshot or run live"
+                    f"Robinhood did not return a quote for external asset {symbol}"
                 )
             parsed[symbol] = Position(symbol, decimal(item["quantity"]), price)
         account_positions.append(
@@ -201,34 +163,14 @@ def main() -> int:
     return 0
 
 
-def fetch_snapshot(endpoint: str, accounts: list[str], symbols: list[str],
-                   token_file: str, verbose: bool = False) -> dict[str, Any]:
+def fetch_portfolios(endpoint: str, accounts: list[str], symbols: list[str],
+                     token_file: str, verbose: bool = False) -> dict[str, Any]:
     token = os.environ.get("ROBINHOOD_MCP_TOKEN")
     client = (RobinhoodClient(token, endpoint=endpoint, verbose=verbose) if token else
               RobinhoodClient.from_token_file(
                   token_file, endpoint=endpoint, verbose=verbose
               ))
-    return client.fetch_snapshot(accounts, symbols)
-
-
-def save_snapshot(path: str, snapshot: dict[str, Any]) -> None:
-    """Atomically replace a normalized snapshot without leaving a partial file."""
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(
-        prefix=f".{target.name}.", suffix=".tmp", dir=target.parent, text=True
-    )
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(snapshot, stream, indent=2)
-            stream.write("\n")
-        os.replace(temporary, target)
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
+    return client.fetch_portfolios(accounts, symbols)
 
 
 def _parse_positions(items: list[dict[str, Any]]) -> dict[str, Position]:

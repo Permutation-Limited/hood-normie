@@ -6,7 +6,7 @@ A small Python library for Robinhood's official Trading MCP server. It provides:
 - OAuth 2.1 discovery, PKCE authentication, token storage, and refresh.
 - Account discovery and selection helpers.
 - Typed high-level access to accounts, portfolios, equity positions, and quotes.
-- Stable normalization of Robinhood responses and multi-account snapshots.
+- Stable normalization of Robinhood responses and multi-account portfolio data.
 
 The library is read/write capable at the MCP transport layer, but its high-level
 `RobinhoodClient` currently exposes read-only portfolio methods. The included
@@ -26,7 +26,7 @@ Basic use:
 from hood_mcp_py import RobinhoodClient
 
 client = RobinhoodClient.from_token_file(".robinhood-mcp-token.json")
-snapshot = client.fetch_snapshot(
+portfolio = client.fetch_portfolios(
     account_numbers=["ACCOUNT_ONE", "ACCOUNT_TWO"],
     quote_symbols=["VTI", "BND"],
 )
@@ -57,7 +57,7 @@ cp examples/rebalance/config.example.json config.json
 bazel run //examples/rebalance:rebalance
 ```
 
-The detailed rebalancer configuration and snapshot workflow is documented in
+The detailed rebalancer configuration is documented in
 [`examples/rebalance/README.md`](examples/rebalance/README.md).
 
 Compatibility aliases remain available as `//:authenticate`, `//:rebalance`,
