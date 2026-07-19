@@ -13,6 +13,12 @@ The library is read/write capable at the MCP transport layer, but its high-level
 `RobinhoodClient` currently exposes read-only portfolio methods. The included
 examples do not place trades.
 
+## Prerequisites
+
+This project requires [Bazelisk](https://github.com/bazelbuild/bazelisk) to
+build, run examples, and execute tests. Bazelisk reads `.bazelversion` and
+automatically uses the required Bazel version.
+
 ## Examples
 
 Authenticate interactively:
