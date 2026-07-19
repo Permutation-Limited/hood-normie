@@ -147,6 +147,11 @@ bazel run //examples/rebalance:rebalance
 Every run fetches current data from Robinhood. Override the config path with
 `--config PATH`. Add `--json` for machine-readable output.
 
+Human-readable reports use color automatically when stdout is a terminal. Use
+`--color=always` to preserve color through a pager, or `--color=never` (or set
+the standard `NO_COLOR` environment variable) for plain text. JSON output is
+never colorized.
+
 Relative paths are resolved from the workspace directory where you invoked
 `bazel run`, not from Bazel's internal runfiles directory. Absolute paths work
 unchanged.

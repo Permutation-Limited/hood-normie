@@ -37,21 +37,27 @@ bazel run //examples/rebalance:rebalance
 Example output (using illustrative account values):
 
 ```text
-CURRENT ASSETS — ROBINHOOD ACCOUNT EXAMPLE
+◆ CURRENT ASSETS — ROBINHOOD ACCOUNT EXAMPLE
 SYMBOL CLASS              QUANTITY        PRICE        VALUE
-VTI    stocks              200.000 $     400.00 $  80,000.00
 BND    bonds               250.000 $      72.00 $  18,000.00
+VTI    stocks              200.000 $     400.00 $  80,000.00
 CASH                                            $  -1,000.00
 TOTAL                                           $  97,000.00
 
-COMPOSITE PORTFOLIO
+◆ COMPOSITE PORTFOLIO
 TOTAL                                           $  97,000.00
 
+◆ REBALANCE PLAN
 ACTION CLASS              AMOUNT      CURRENT       TARGET
 BUY    bonds        $   1,800.00 $  18,000.00 $  19,800.00
 SELL   stocks       $     800.00 $  80,000.00 $  79,200.00
 SELL   cash         $   1,000.00 $  -1,000.00 $  -2,000.00
 ```
+
+In a terminal, section headings are bold cyan, `BUY` rows are green, `SELL`
+rows are red, warnings are yellow, and totals are emphasized. Markdown code
+blocks cannot portably reproduce ANSI terminal colors, so the example above
+shows the same layout in plain text.
 
 The recommendations are class-level dollar adjustments only. The example is
 read-only and does not choose a security or place an order.

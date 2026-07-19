@@ -19,6 +19,33 @@ DEFAULT_ENDPOINT = "https://agent.robinhood.com/mcp/trading"
 DEFAULT_CONFIG = "config.yaml"
 
 
+class Style:
+    """Small, dependency-free ANSI styling helper."""
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    CYAN = "\033[36m"
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+
+    def apply(self, value: object, *codes: str) -> str:
+        text = str(value)
+        return f"{''.join(codes)}{text}{self.RESET}" if self.enabled else text
+
+
+def _color_enabled(mode: str, stream: object) -> bool:
+    if mode == "always":
+        return True
+    if mode == "never" or os.environ.get("NO_COLOR") is not None:
+        return False
+    return bool(getattr(stream, "isatty", lambda: False)())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compute a read-only Robinhood rebalance plan")
     parser.add_argument("--config", default=DEFAULT_CONFIG,
@@ -29,9 +56,14 @@ def main() -> int:
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
                         help="OAuth token file created by //examples:authenticate")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    parser.add_argument(
+        "--color", choices=("auto", "always", "never"), default="auto",
+        help="colorize human-readable output (default: auto)",
+    )
     parser.add_argument("--verbose", action="store_true",
                         help="print MCP JSON-RPC requests and responses to stderr")
     args = parser.parse_args()
+    style = Style(_color_enabled(args.color, sys.stdout) and not args.json)
 
     args.config = workspace_path(args.config)
     args.token_file = workspace_path(args.token_file)
@@ -128,17 +160,21 @@ def main() -> int:
     output_recommendations = recommendations + [cash_recommendation]
     if not args.json:
         for label, held_positions, account_cash in account_positions:
-            _print_asset_table(label, held_positions, account_cash, asset_classes)
-        print("COMPOSITE PORTFOLIO")
-        print(f"{'TOTAL':<48}${marked_account_equity:>11,.2f}\n")
+            _print_asset_table(label, held_positions, account_cash, asset_classes, style)
+        print(style.apply("◆ COMPOSITE PORTFOLIO", style.BOLD, style.CYAN))
+        print(style.apply(f"{'TOTAL':<48}${marked_account_equity:>11,.2f}", style.BOLD))
+        print()
     unclassified = sorted(
         (position for symbol, position in positions.items() if symbol not in asset_classes),
         key=lambda position: position.symbol,
     )
     warning_stream = sys.stderr if args.json else sys.stdout
     if unclassified:
-        print("NOTICE: Unclassified assets are implicitly ignored in allocation calculations:",
-              file=warning_stream)
+        warning_style = Style(_color_enabled(args.color, warning_stream) and not args.json)
+        print(warning_style.apply(
+            "⚠ NOTICE: Unclassified assets are implicitly ignored in allocation calculations:",
+            warning_style.BOLD, warning_style.YELLOW,
+        ), file=warning_stream)
         for position in unclassified:
             print(f"  - {position.symbol}: ${position.market_value:,.2f}", file=warning_stream)
         print(
@@ -153,11 +189,18 @@ def main() -> int:
             "current_value": str(r.current_value), "target_value": str(r.target_value),
         } for r in output_recommendations], indent=2))
     else:
-        print("ACTION CLASS              AMOUNT      CURRENT       TARGET")
+        print(style.apply("◆ REBALANCE PLAN", style.BOLD, style.CYAN))
+        print(style.apply(
+            "ACTION CLASS              AMOUNT      CURRENT       TARGET", style.DIM
+        ))
         for r in output_recommendations:
-            print(f"{r.action:<6} {r.asset_class:<12} "
-                  f"${abs(r.amount):>11,.2f} "
-                  f"${r.current_value:>11,.2f} ${r.target_value:>11,.2f}")
+            line = (f"{r.action:<6} {r.asset_class:<12} "
+                    f"${abs(r.amount):>11,.2f} "
+                    f"${r.current_value:>11,.2f} ${r.target_value:>11,.2f}")
+            action_color = {
+                "BUY": style.GREEN, "SELL": style.RED, "HOLD": style.DIM,
+            }.get(r.action, style.DIM)
+            print(style.apply(line, action_color))
     return 0
 
 
@@ -205,10 +248,12 @@ def _aggregate_positions(
 
 def _print_asset_table(
     label: str, positions: dict[str, Position], cash: Decimal,
-    asset_classes: dict[str, str],
+    asset_classes: dict[str, str], style: Style,
 ) -> None:
-    print(f"CURRENT ASSETS — {label}")
-    print("SYMBOL CLASS              QUANTITY        PRICE        VALUE")
+    print(style.apply(f"◆ CURRENT ASSETS — {label}", style.BOLD, style.CYAN))
+    print(style.apply(
+        "SYMBOL CLASS              QUANTITY        PRICE        VALUE", style.DIM
+    ))
     if positions:
         for position in sorted(positions.values(), key=lambda item: item.symbol):
             asset_class = asset_classes.get(position.symbol, "UNCLASSIFIED")
@@ -218,17 +263,18 @@ def _print_asset_table(
                 f"${position.market_value:>11,.2f}"
             )
     else:
-        print("(no positions)")
+        print(style.apply("(no positions)", style.DIM))
         if label.startswith("ROBINHOOD"):
-            print(
+            print(style.apply(
                 "WARNING: Robinhood returned no equity positions for this account. "
-                "Verify its number in config.yaml."
-            )
+                "Verify its number in config.yaml.", style.YELLOW
+            ))
     total_assets = sum(
         (position.market_value for position in positions.values()), Decimal(0)
     )
-    print(f"{'CASH':<48}${cash:>11,.2f}")
-    print(f"{'TOTAL':<48}${total_assets + cash:>11,.2f}\n")
+    print(style.apply(f"{'CASH':<48}${cash:>11,.2f}", style.CYAN))
+    print(style.apply(f"{'TOTAL':<48}${total_assets + cash:>11,.2f}", style.BOLD))
+    print()
 
 
 if __name__ == "__main__":
