@@ -21,6 +21,7 @@ py_test(
         "//examples/rebalance:typecheck_sources",
         "//hood_normie:typecheck_sources",
         "//hooks:typecheck_sources",
+        "//webapp:typecheck_sources",
     ],
     deps = [
         requirement("mypy"),

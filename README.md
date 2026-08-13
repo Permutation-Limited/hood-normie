@@ -8,6 +8,7 @@ A small Python library for Robinhood's official Trading MCP server. It provides:
 - Typed high-level access to accounts, portfolios, equity positions, and quotes.
 - Stable normalization of Robinhood responses and multi-account portfolio data.
 - A targeted example showing how to implement simple portfolio rebalancing (read-only instructions, doesn't execute trades)
+- A local web app presenting the same rebalance report in a browser
 
 The library is read/write capable at the MCP transport layer, but its high-level
 `RobinhoodClient` currently exposes read-only portfolio methods. The included
@@ -74,6 +75,20 @@ symbol classification, and each is rebalanced independently.
 
 The detailed rebalancer configuration is documented in
 [`examples/rebalance/README.md`](examples/rebalance/README.md).
+
+## Web app
+
+The same report, in a browser:
+
+```sh
+bazel run //webapp:server
+```
+
+Then open <http://127.0.0.1:8765>. A Python server hosts a React + TypeScript +
+MUI single-page app (TanStack Router and Query) and answers a small read-only
+JSON API. The bundle builds under Bazel with `aspect_rules_js`, which supplies
+its own Node and pnpm — no Node installation is needed on the host. The listener
+binds to loopback only; see [`webapp/README.md`](webapp/README.md).
 
 ## Bazel library
 

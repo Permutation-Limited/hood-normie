@@ -1,0 +1,64 @@
+load("@aspect_rules_js//js:defs.bzl", "js_run_binary", "js_test")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@npm//webapp/frontend:typescript/package_json.bzl", typescript_bin = "bin")
+load("@npm//webapp/frontend:vite/package_json.bzl", vite_bin = "bin")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "package.json",
+    "pnpm-lock.yaml",
+])
+
+npm_link_all_packages(name = "node_modules")
+
+# Everything Vite and tsc read: sources plus their configuration.
+SRCS = glob(["src/**/*.ts", "src/**/*.tsx"]) + [
+    "index.html",
+    "tsconfig.json",
+    "vite.config.ts",
+]
+
+DEPS = [
+    ":node_modules/@emotion/react",
+    ":node_modules/@emotion/styled",
+    ":node_modules/@mui/icons-material",
+    ":node_modules/@mui/material",
+    ":node_modules/@tanstack/react-query",
+    ":node_modules/@tanstack/react-router",
+    ":node_modules/@types/react",
+    ":node_modules/@types/react-dom",
+    ":node_modules/@vitejs/plugin-react",
+    ":node_modules/react",
+    ":node_modules/react-dom",
+    # vite.config.ts imports it, and tsconfig pulls in its "vite/client" types.
+    ":node_modules/vite",
+]
+
+vite_bin.vite_binary(name = "vite")
+
+# The single-page app the Python server serves as static files.
+js_run_binary(
+    name = "dist",
+    srcs = SRCS + DEPS,
+    args = ["build"],
+    chdir = package_name(),
+    out_dirs = ["dist"],
+    tool = ":vite",
+)
+
+typescript_bin.tsc_test(
+    name = "typecheck",
+    args = [
+        "--noEmit",
+        "-p",
+        "$(location tsconfig.json)",
+    ],
+    data = SRCS + DEPS,
+)
+
+js_test(
+    name = "smoke_test",
+    data = [":dist"],
+    entry_point = "tools/check_dist.mjs",
+)

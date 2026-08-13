@@ -2,6 +2,8 @@ module(name = "hood_normie", version = "0.1.0")
 
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "pre-commit", version = "1.0.11")
+bazel_dep(name = "aspect_rules_js", version = "3.4.0")
+bazel_dep(name = "rules_nodejs", version = "6.7.5")
 
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
@@ -10,3 +12,18 @@ pip.parse(
     requirements_lock = "//:requirements_lock.txt",
 )
 use_repo(pip, "pip")
+
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node", dev_dependency = True)
+node.toolchain(node_version = "22.14.0")
+
+pnpm = use_extension("@aspect_rules_js//npm:extensions.bzl", "pnpm")
+use_repo(pnpm, "pnpm")
+
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm")
+npm.npm_translate_lock(
+    name = "npm",
+    data = ["//webapp/frontend:package.json"],
+    pnpm_lock = "//webapp/frontend:pnpm-lock.yaml",
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+use_repo(npm, "npm")

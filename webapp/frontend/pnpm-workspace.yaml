@@ -1,0 +1,5 @@
+# rules_js requires every package whose lifecycle hooks run to be declared here.
+# esbuild resolves its platform binary in a postinstall script; nothing else in
+# this dependency tree needs to run code at install time.
+allowBuilds:
+  '0': esbuild

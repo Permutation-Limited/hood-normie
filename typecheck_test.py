@@ -8,7 +8,10 @@ from mypy import api
 
 def main() -> int:
     workspace = Path(__file__).resolve().parent
-    roots = [workspace / name for name in ("examples", "hood_normie", "hooks")]
+    roots = [
+        workspace / name
+        for name in ("examples", "hood_normie", "hooks", "webapp")
+    ]
     sources = [path for root in roots for path in root.rglob("*.py")]
     production = [str(path) for path in sources if not path.name.endswith("_test.py")]
     tests = [str(path) for path in sources if path.name.endswith("_test.py")]

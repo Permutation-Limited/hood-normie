@@ -1,0 +1,48 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "typecheck_sources",
+    srcs = glob(["*.py"]),
+)
+
+py_library(
+    name = "api",
+    srcs = ["__init__.py", "api.py"],
+    deps = ["//examples/rebalance:report"],
+)
+
+py_binary(
+    name = "server",
+    srcs = ["server.py"],
+    data = ["//webapp/frontend:dist"],
+    main = "server.py",
+    deps = [
+        ":api",
+        "//examples:paths",
+        "//examples/rebalance:report",
+        "//hood_normie",
+    ],
+)
+
+py_test(
+    name = "server_test",
+    srcs = ["server_test.py"],
+    main = "server_test.py",
+    deps = [
+        ":api",
+        ":server_lib",
+    ],
+)
+
+py_library(
+    name = "server_lib",
+    srcs = ["server.py"],
+    deps = [
+        ":api",
+        "//examples:paths",
+        "//examples/rebalance:report",
+        "//hood_normie",
+    ],
+)

@@ -14,15 +14,24 @@ py_library(
     deps = [requirement("pyyaml")],
 )
 
+py_library(
+    name = "report",
+    srcs = ["report.py"],
+    deps = [
+        ":core",
+        "//hood_normie",
+    ],
+)
+
 py_binary(
     name = "rebalance",
     srcs = ["main.py"],
     main = "main.py",
     deps = [
         ":core",
+        ":report",
         "//examples:paths",
         "//examples:terminal",
-        "//hood_normie",
     ],
 )
 

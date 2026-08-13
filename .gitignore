@@ -6,3 +6,5 @@ __pycache__/
 /config.json
 /config.yaml
 /snapshot.json
+node_modules/
+/webapp/frontend/dist/
