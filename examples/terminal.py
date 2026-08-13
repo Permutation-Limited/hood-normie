@@ -10,6 +10,7 @@ class Style:
     RED = "\033[31m"
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
+    MAGENTA = "\033[35m"
     CYAN = "\033[36m"
 
     def __init__(self, enabled: bool) -> None:

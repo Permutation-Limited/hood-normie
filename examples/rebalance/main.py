@@ -95,7 +95,9 @@ def main() -> int:
         equity = _marked_equity(tables)
         total_equity += equity
         if len(reports) > 1:
-            print(style.apply(f"━━ PORTFOLIO {portfolio.name}", style.BOLD, style.CYAN))
+            # Magenta separates portfolio sections from their cyan subsections.
+            print(style.apply(f"━━ PORTFOLIO {portfolio.name}",
+                              style.BOLD, style.MAGENTA))
             print()
         for label, held_positions, account_cash in tables:
             _print_asset_table(label, held_positions, account_cash, asset_classes, style)
@@ -107,7 +109,7 @@ def main() -> int:
         _print_plan(portfolio, recommendations, style, labelled=len(reports) > 1)
         print()
     if len(reports) > 1:
-        print(style.apply("◆ ALL PORTFOLIOS", style.BOLD, style.CYAN))
+        print(style.apply("━━ ALL PORTFOLIOS", style.BOLD, style.MAGENTA))
         print(style.apply(f"{'TOTAL':<48}${total_equity:>11,.2f}", style.BOLD))
     return 0
 
