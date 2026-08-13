@@ -1,13 +1,19 @@
 from decimal import Decimal
+from typing import cast
 import unittest
 from unittest.mock import mock_open, patch
 
 from examples.rebalance.core import (
-    ClassTarget, Position, calculate, calculate_cash, configured_account_numbers,
-    load_config,
+    ClassTarget, Position, RebalanceConfig, calculate, calculate_cash,
+    configured_account_numbers, load_config, parse_asset_classes, parse_portfolios,
 )
 from examples.paths import workspace_path
 from hood_normie.accounts import select_account
+
+
+def rebalance_config(**fields: object) -> RebalanceConfig:
+    """Build a config literal without restating the TypedDict's required keys."""
+    return cast(RebalanceConfig, fields)
 
 
 class CalculateTest(unittest.TestCase):
@@ -236,6 +242,114 @@ class ConfigTest(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data="- not\n- a\n- mapping\n")):
             with self.assertRaisesRegex(ValueError, "must be a YAML mapping"):
                 load_config("config.yaml")
+
+
+class PortfolioConfigTest(unittest.TestCase):
+    ASSETS = [{"symbol": "vti", "class": "stocks"}, {"symbol": "BND", "class": "bonds"}]
+
+    def config(self, *portfolios):
+        return {"assets": self.ASSETS, "portfolios": list(portfolios)}
+
+    def portfolio(self, name, **overrides):
+        entry = {
+            "name": name,
+            "classes": [{"name": "stocks", "weight": 0.6},
+                        {"name": "bonds", "weight": 0.4}],
+        }
+        entry.update(overrides)
+        return entry
+
+    def test_asset_classes_are_global_and_upper_cased(self):
+        self.assertEqual(parse_asset_classes(self.config()),
+                         {"VTI": "stocks", "BND": "bonds"})
+
+    def test_rejects_duplicate_asset_symbols(self):
+        with self.assertRaisesRegex(ValueError, "symbols must be unique"):
+            parse_asset_classes(rebalance_config(assets=[
+                {"symbol": "VTI", "class": "stocks"},
+                {"symbol": "vti", "class": "bonds"},
+            ]))
+
+    def test_parses_each_portfolio_independently(self):
+        config = self.config(
+            self.portfolio("taxable", robinhood_account_numbers=[111],
+                           target_cash=-2000, minimum_trade=5),
+            self.portfolio("retirement", classes=[{"name": "stocks", "weight": 1.0},
+                                                  {"name": "bonds", "ignore": True}]),
+        )
+        taxable, retirement = parse_portfolios(config, parse_asset_classes(config))
+        self.assertEqual(taxable.account_numbers, ("111",))
+        self.assertEqual(taxable.target_cash, Decimal("-2000"))
+        self.assertEqual(taxable.minimum_trade, Decimal("5"))
+        self.assertEqual([target.weight for target in taxable.targets],
+                         [Decimal("0.6"), Decimal("0.4")])
+        self.assertEqual(retirement.account_numbers, ())
+        self.assertEqual(retirement.target_cash, Decimal(0))
+        self.assertTrue(retirement.targets[1].ignore)
+
+    def test_collects_external_symbols(self):
+        config = self.config(self.portfolio("taxable", external_accounts=[
+            {"name": "401(k)", "assets": [{"symbol": "vti", "quantity": 10}]},
+        ]))
+        portfolio = parse_portfolios(config, parse_asset_classes(config))[0]
+        self.assertEqual(portfolio.external_symbols, {"VTI"})
+
+    def test_rejects_duplicate_portfolio_names(self):
+        config = self.config(self.portfolio("taxable"), self.portfolio("taxable"))
+        with self.assertRaisesRegex(ValueError, "portfolio names must be unique"):
+            parse_portfolios(config, parse_asset_classes(config))
+
+    def test_rejects_account_shared_by_two_portfolios(self):
+        config = self.config(
+            self.portfolio("taxable", robinhood_account_numbers=["111"]),
+            self.portfolio("retirement", robinhood_account_numbers=[111]),
+        )
+        with self.assertRaisesRegex(ValueError, "listed in both portfolio"):
+            parse_portfolios(config, parse_asset_classes(config))
+
+    def test_undeclared_class_targets_zero_in_that_portfolio(self):
+        config = self.config(
+            self.portfolio("taxable", classes=[{"name": "stocks", "weight": 1.0}])
+        )
+        portfolio = parse_portfolios(config, parse_asset_classes(config))[0]
+        bonds = portfolio.targets[-1]
+        self.assertEqual(bonds.name, "bonds")
+        self.assertEqual(bonds.target_amount, Decimal(0))
+        self.assertFalse(bonds.ignore)
+        result = calculate(
+            current_cash=Decimal(0), target_cash=portfolio.target_cash,
+            targets=portfolio.targets,
+            asset_classes=parse_asset_classes(config),
+            positions={"BND": Position("BND", Decimal(1), Decimal("100"))},
+        )
+        by_class = {item.asset_class: item for item in result}
+        self.assertEqual(by_class["bonds"].target_value, Decimal("0.00"))
+        self.assertEqual(by_class["bonds"].amount, Decimal("-100.00"))
+        self.assertEqual(by_class["stocks"].target_value, Decimal("100.00"))
+
+    def test_rejects_duplicate_external_account_names(self):
+        config = self.config(self.portfolio("taxable", external_accounts=[
+            {"name": "401(k)"}, {"name": "401(k)"},
+        ]))
+        with self.assertRaisesRegex(ValueError, "external account names must be unique"):
+            parse_portfolios(config, parse_asset_classes(config))
+
+    def test_rejects_single_portfolio_schema(self):
+        config = rebalance_config(assets=[], classes=[], target_cash=0)
+        with self.assertRaisesRegex(ValueError, "single-portfolio schema"):
+            parse_portfolios(config, {})
+
+    def test_rejects_legacy_per_symbol_targets_schema(self):
+        with self.assertRaisesRegex(ValueError, "per-symbol targets schema"):
+            parse_portfolios(rebalance_config(assets=[], targets={"VTI": 1}), {})
+
+    def test_requires_portfolios_section(self):
+        with self.assertRaisesRegex(ValueError, "top-level portfolios section"):
+            parse_portfolios(rebalance_config(assets=[]), {})
+
+    def test_rejects_empty_portfolios_list(self):
+        with self.assertRaisesRegex(ValueError, "non-empty list"):
+            parse_portfolios(rebalance_config(assets=[], portfolios=[]), {})
 
 
 class AccountSelectionTest(unittest.TestCase):

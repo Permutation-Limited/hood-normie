@@ -38,13 +38,33 @@ class AccountSelectionConfig(TypedDict):
     account_number: NotRequired[str | int]
 
 
-class RebalanceConfig(AccountSelectionConfig):
+class PortfolioConfig(AccountSelectionConfig):
+    name: Required[str]
     classes: Required[list[ClassConfig]]
-    assets: Required[list[AssetConfig]]
     target_cash: NotRequired[NumericInput]
     minimum_trade: NotRequired[NumericInput]
     external_accounts: NotRequired[list[ExternalAccountConfig]]
+
+
+class RebalanceConfig(TypedDict):
+    assets: Required[list[AssetConfig]]
+    portfolios: Required[list[PortfolioConfig]]
+    # Retired schemas, detected only to produce an explicit migration error.
+    classes: NotRequired[object]
     targets: NotRequired[object]
+    robinhood_account_numbers: NotRequired[object]
+    account_number: NotRequired[object]
+    target_cash: NotRequired[object]
+    minimum_trade: NotRequired[object]
+    external_accounts: NotRequired[object]
+
+
+# Fields that belonged to the retired single-portfolio schema and now live on
+# each entry of the top-level portfolios list.
+PORTFOLIO_FIELDS = (
+    "classes", "robinhood_account_numbers", "account_number", "target_cash",
+    "minimum_trade", "external_accounts",
+)
 
 
 def load_config(path: str) -> RebalanceConfig:
@@ -81,6 +101,26 @@ class ClassTarget:
     weight: Decimal | None = None
     target_amount: Decimal | None = None
     ignore: bool = False
+
+
+@dataclass(frozen=True)
+class Portfolio:
+    """One independently rebalanced set of accounts and class targets."""
+
+    name: str
+    targets: tuple[ClassTarget, ...]
+    account_numbers: tuple[str, ...] = ()
+    external_accounts: tuple[ExternalAccountConfig, ...] = ()
+    target_cash: Decimal = Decimal(0)
+    minimum_trade: Decimal = Decimal(0)
+
+    @property
+    def external_symbols(self) -> set[str]:
+        return {
+            item["symbol"].upper()
+            for account in self.external_accounts
+            for item in account.get("assets", [])
+        }
 
 
 @dataclass(frozen=True)
@@ -140,6 +180,92 @@ def validate_targets(targets: Iterable[ClassTarget]) -> list[ClassTarget]:
     if len(variable) == len(active) and abs(variable_weight - Decimal(1)) > Decimal("0.000001"):
         raise ValueError(f"target weights must sum to 1; got {variable_weight}")
     return result
+
+
+def parse_asset_classes(config: RebalanceConfig) -> dict[str, str]:
+    """Return the global symbol-to-class map shared by every portfolio."""
+    if "assets" not in config:
+        raise ValueError("config must contain a top-level assets section")
+    entries = config["assets"]
+    asset_classes = {item["symbol"].upper(): item["class"] for item in entries}
+    if len(asset_classes) != len(entries):
+        raise ValueError("asset symbols must be unique")
+    return asset_classes
+
+
+def parse_portfolios(
+    config: RebalanceConfig, asset_classes: Mapping[str, str]
+) -> list[Portfolio]:
+    """Return every configured portfolio, validated against the global assets."""
+    if "portfolios" not in config:
+        if "targets" in config:
+            raise ValueError(
+                "config uses the old per-symbol targets schema; replace it with "
+                "a top-level assets section and a portfolios list "
+                "(see examples/rebalance/config.example.yaml)"
+            )
+        moved = [field for field in PORTFOLIO_FIELDS if field in config]
+        if moved:
+            raise ValueError(
+                "config uses the old single-portfolio schema; move "
+                f"{', '.join(moved)} into an entry of a top-level portfolios list "
+                "(see examples/rebalance/config.example.yaml)"
+            )
+        raise ValueError("config must contain a top-level portfolios section")
+    entries = config["portfolios"]
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("portfolios must be a non-empty list")
+    portfolios = [_parse_portfolio(entry, asset_classes) for entry in entries]
+    names = [portfolio.name for portfolio in portfolios]
+    if len(names) != len(set(names)):
+        raise ValueError("portfolio names must be unique")
+    owner: dict[str, str] = {}
+    for portfolio in portfolios:
+        for number in portfolio.account_numbers:
+            if number in owner:
+                raise ValueError(
+                    f"Robinhood account {number} is listed in both portfolio "
+                    f"{owner[number]} and portfolio {portfolio.name}"
+                )
+            owner[number] = portfolio.name
+    return portfolios
+
+
+def _parse_portfolio(
+    entry: PortfolioConfig, asset_classes: Mapping[str, str]
+) -> Portfolio:
+    if "name" not in entry:
+        raise ValueError("every portfolio requires a name")
+    name = str(entry["name"])
+    if "classes" not in entry:
+        raise ValueError(f"portfolio {name} must contain a classes section")
+    declared = [ClassTarget(
+        name=item["name"],
+        weight=decimal(item["weight"]) if item.get("weight") is not None else None,
+        target_amount=(decimal(item["target_amount"])
+                       if item.get("target_amount") is not None else None),
+        ignore=bool(item.get("ignore", False)),
+    ) for item in entry["classes"]]
+    # Classification is global, so a portfolio need only name the classes it has
+    # an opinion about. The rest target $0 here: held value still counts and the
+    # plan sells it. Declare the class with ignore: true to exclude it instead.
+    undeclared = sorted(set(asset_classes.values()) - {t.name for t in declared})
+    targets = validate_targets(declared + [
+        ClassTarget(name=class_name, target_amount=Decimal(0))
+        for class_name in undeclared
+    ])
+    external_accounts = list(entry.get("external_accounts", []))
+    external_names = [account["name"] for account in external_accounts]
+    if len(external_names) != len(set(external_names)):
+        raise ValueError(f"external account names must be unique in portfolio {name}")
+    return Portfolio(
+        name=name,
+        targets=tuple(targets),
+        account_numbers=tuple(configured_account_numbers(entry)),
+        external_accounts=tuple(external_accounts),
+        target_cash=decimal(entry.get("target_cash", 0)),
+        minimum_trade=decimal(entry.get("minimum_trade", 0)),
+    )
 
 
 def calculate(

@@ -10,7 +10,9 @@ buying power, taxes, and unsettled funds yourself.
 
 ## Allocation model
 
-Class weights sum to 1 and apply to invested assets:
+Each portfolio is computed independently: its accounts, its cash, its targets.
+Nothing is netted across portfolios. Class weights sum to 1 and apply to the
+invested assets of the portfolio they belong to:
 
 ```
 marked equity   = marked position values + broker-reported cash
@@ -25,27 +27,41 @@ are aggregated before calculating the recommendation.
 
 ## Configuration model
 
-`classes` defines the allocation policy. `assets` only classifies symbols:
+The config has exactly two top-level sections. `assets` is global: it classifies
+symbols for every portfolio. `portfolios` is a list, and each entry owns its own
+accounts and its own allocation policy:
 
 ```yaml
-robinhood_account_numbers: [ACCOUNT_ONE, ACCOUNT_TWO]
-target_cash: -2000
-minimum_trade: 5
-classes:
-  - {name: stocks, weight: 0.80, target_amount: null, ignore: false}
-  - {name: bonds, weight: 0.20, target_amount: null, ignore: false}
-  - {name: legacy, ignore: true}
 assets:
   - {symbol: VTI, class: stocks}
   - {symbol: VXUS, class: stocks}
   - {symbol: BND, class: bonds}
   - {symbol: OLD, class: legacy}
-external_accounts:
-  - name: 401(k)
-    cash: 500
-    assets:
-      - {symbol: VTI, quantity: 10}
+portfolios:
+  - name: taxable
+    robinhood_account_numbers: [ACCOUNT_ONE]
+    target_cash: -2000
+    minimum_trade: 5
+    classes:
+      - {name: stocks, weight: 0.80, target_amount: null, ignore: false}
+      - {name: bonds, weight: 0.20, target_amount: null, ignore: false}
+      - {name: legacy, ignore: true}
+    external_accounts:
+      - name: 401(k)
+        cash: 500
+        assets:
+          - {symbol: VTI, quantity: 10}
+  - name: retirement
+    robinhood_account_numbers: [ACCOUNT_TWO]
+    classes:
+      - {name: stocks, weight: 0.60}
+      - {name: bonds, weight: 0.40}
 ```
+
+Each portfolio requires `name` and `classes`. `robinhood_account_numbers`,
+`external_accounts`, `target_cash` (default `0`), and `minimum_trade`
+(default `0`) are optional and are never inherited between portfolios — a
+portfolio with no accounts of either kind simply holds nothing.
 
 The output says how many dollars of each class to buy or sell. It deliberately
 does not divide that amount among `VTI`, `VXUS`, or other symbols. Every held
@@ -105,20 +121,47 @@ with each symbol's mapped class, quantity, price, and market value. The heading
 also shows the Robinhood account number or external account name. Each account
 has its own table, while the final action table uses their combined holdings.
 
+### Multiple portfolios
+
+`portfolios` may hold any number of entries. Portfolio names must be unique, and
+a Robinhood account number may appear in only one portfolio — sharing one would
+count its holdings twice.
+
+Because classification is global while policy is per portfolio, a portfolio need
+only declare the classes it has an opinion about. Any class named in `assets` but
+missing from a portfolio's `classes` gets an implicit `target_amount: 0` there:
+holdings of it still count toward that portfolio's value, and the plan says to
+sell them. Declare the class with `ignore: true` instead to leave it out of the
+calculation entirely.
+
+With more than one portfolio, human-readable output repeats the account tables,
+composite total, and rebalance plan under a `━━ PORTFOLIO name` heading for each
+one, and ends with an `◆ ALL PORTFOLIOS` grand total. `--json` emits one object
+per portfolio: `[{"portfolio": name, "recommendations": [...]}]`.
+
+Restrict a run to particular portfolios with `--portfolio NAME`, repeated for
+several. Names must match the config.
+
 ### Multiple and external accounts
 
-Put any number of brokerage numbers in `robinhood_account_numbers`. On the
-command line, repeat `--account NUMBER` to override the configured list for one
-run.
+Put any number of brokerage numbers in a portfolio's
+`robinhood_account_numbers`. On the command line, repeat `--account NUMBER` to
+override that list for one run; because the override cannot say which portfolio
+it belongs to, it requires a run of exactly one portfolio (use `--portfolio`
+first if the config has several).
+
+Automatic account selection — letting Robinhood pick when no number is
+configured — works only for a single-portfolio config, for the same reason.
 
 `external_accounts` contains named accounts whose positions are not retrieved
 from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
 `quantity`. An optional `cash` field defaults to zero. The program obtains current
 prices from Robinhood quotes. External asset value and cash are added to composite
 marked equity, and external cash is included in composite current cash.
-Symbols use the same top-level `assets` mapping as Robinhood holdings. Each
-account table shows its cash and total value. After the individual account
-tables, a composite portfolio `TOTAL` shows the combined marked equity.
+Symbols use the same global `assets` mapping as Robinhood holdings, and external
+account names must be unique within their portfolio. Each account table shows its
+cash and total value. After a portfolio's account tables, a composite portfolio
+`TOTAL` shows its combined marked equity.
 
 ## Configure and run
 
@@ -132,12 +175,15 @@ cp examples/rebalance/config.example.yaml config.yaml
 documentation. Edit it with your actual target allocation and account numbers:
 
 ```yaml
-robinhood_account_numbers: [ACCOUNT_ONE, ACCOUNT_TWO]
+portfolios:
+  - name: taxable
+    robinhood_account_numbers: [ACCOUNT_ONE, ACCOUNT_TWO]
 ```
 
-Replace the existing `robinhood_account_numbers` line; the snippet above is only
-that one field, not a complete config file. JSON config files are not accepted.
-Then run:
+Replace the placeholder account numbers under each portfolio; the snippet above
+is only that fragment, not a complete config file. Delete the second example
+portfolio if you only rebalance one. JSON config files are not accepted. Then
+run:
 
 ```sh
 bazel test //...
@@ -187,8 +233,10 @@ bazel run //examples/rebalance:rebalance
 ```
 
 For live requests, account selection uses repeated `--account` arguments first,
-then `robinhood_account_numbers`, and finally automatic selection when Robinhood
-returns exactly one recognizable account.
+then each portfolio's `robinhood_account_numbers`, and finally — only for a
+single-portfolio run with no configured numbers — automatic selection when
+Robinhood returns exactly one recognizable account. Every portfolio's accounts
+are fetched in one pass, so adding portfolios does not re-request shared quotes.
 
 The rebalancer reads the saved token and refreshes it automatically when needed.
 `ROBINHOOD_MCP_TOKEN` is still supported as a temporary override, but storing a

@@ -57,7 +57,7 @@ VTI    stocks              200.000 $     400.00 $  80,000.00
 CASH                                            $  -1,000.00
 TOTAL                                           $  97,000.00
 
-◆ COMPOSITE PORTFOLIO
+◆ COMPOSITE PORTFOLIO — taxable
 TOTAL                                           $  97,000.00
 
 ◆ REBALANCE PLAN
@@ -68,7 +68,9 @@ SELL   cash         $   1,000.00 $  -1,000.00 $  -2,000.00
 ```
 
 The recommendations are class-level dollar adjustments only. The example is
-read-only and does not choose a security or place an order.
+read-only and does not choose a security or place an order. The config holds a
+list of portfolios, each with its own accounts and class targets over one shared
+symbol classification, and each is rebalanced independently.
 
 The detailed rebalancer configuration is documented in
 [`examples/rebalance/README.md`](examples/rebalance/README.md).
