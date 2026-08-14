@@ -48,7 +48,6 @@ export default function Accounts(): ReactElement {
             ? "Invented accounts, no account contacted"
             : "Every Robinhood account this token can read"
       }
-      demo={Boolean(data?.demo)}
       error={error}
       isFetching={isFetching}
       hasData={Boolean(data)}

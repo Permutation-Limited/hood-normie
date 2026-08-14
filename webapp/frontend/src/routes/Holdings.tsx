@@ -24,7 +24,6 @@ export default function Holdings(): ReactElement {
             ? "Invented positions, no account contacted"
             : "Live Robinhood positions and quotes"
       }
-      demo={Boolean(data?.demo)}
       notice="Equity positions only, marked at the latest quote. Options, crypto, and
         anything held outside Robinhood are not shown here."
       error={error}

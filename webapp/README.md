@@ -54,17 +54,23 @@ rules.
 
 ## Demo mode
 
-The **Demo** switch in the header replaces your accounts with invented ones:
+The **Demo** chip in the header replaces your accounts with invented ones:
 
 ```
 http://127.0.0.1:8765/rebalance?demo=1
 ```
 
+The chip is both the indicator and the switch, and it always names the state you
+are in rather than the one it would switch to: filled amber "Demo data" on, a
+quiet outlined "Live data" off. A glance at the header answers "am I looking at
+my own money?" without interpreting a control. It is the only place the app says
+anything about demo mode, so no second badge or banner can disagree with it, and
+it stays on screen on every tab.
+
 The state lives in the URL, so a demo view is linkable, survives a reload, and
 follows you across navigation — a live URL can never be showing demo numbers or
-the reverse. Every demo response also carries `"demo": true`, and the page labels
-itself from that field rather than from the URL, so the banner reflects what the
-server actually computed.
+the reverse. Every demo response also carries `"demo": true`; CSV exports are
+named from that field, so a downloaded demo file says so in its filename.
 
 A demo request reads `webapp/demo_config.yaml` and the invented snapshot in
 `webapp/demo.py`, whose `ACCOUNTS` records stand in for `get_accounts` on the
@@ -85,7 +91,7 @@ build rather than the page.
 | --- | --- |
 | `server.py` | HTTP server: static assets, SPA fallback, the `/api` endpoints |
 | `api.py` | Report-to-JSON serialization |
-| `demo.py`, `demo_config.yaml` | Invented data behind the header's Demo switch |
+| `demo.py`, `demo_config.yaml` | Invented data behind the header's Demo chip |
 | `frontend/` | Vite + React + TypeScript sources |
 
 The numbers come from `//examples/rebalance:report` and

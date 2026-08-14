@@ -104,7 +104,6 @@ export default function Rebalance(): ReactElement {
             ? "Invented portfolios, no account contacted"
             : "Live Robinhood quotes and positions"
       }
-      demo={Boolean(data?.demo)}
       notice="Read-only. These are class-level dollar amounts, not orders — the tool
         does not choose a security and never places a trade."
       error={error}

@@ -1,6 +1,5 @@
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Container from "@mui/material/Container";
 import IconButton from "@mui/material/IconButton";
@@ -10,11 +9,10 @@ import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import ScienceIcon from "@mui/icons-material/Science";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState, useSearch } from "@tanstack/react-router";
 import type { ReactElement } from "react";
-import DemoSwitch from "./DemoSwitch";
+import DemoChip from "./DemoChip";
 
 const NAV = [
   { label: "Home", to: "/" },
@@ -93,18 +91,7 @@ export default function Layout(): ReactElement {
               </IconButton>
             </span>
           </Tooltip>
-          {demo && (
-            <Chip
-              icon={<ScienceIcon />}
-              label="Demo data"
-              color="warning"
-              size="small"
-              // Redundant on small screens: the switch is right beside it and
-              // the page itself carries a full demo banner.
-              sx={{ display: { xs: "none", sm: "flex" } }}
-            />
-          )}
-          <DemoSwitch demo={Boolean(demo)} />
+          <DemoChip demo={Boolean(demo)} />
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1 }}>

@@ -93,9 +93,10 @@ JSON API. The bundle builds under Bazel with `aspect_rules_js`, which supplies
 its own Node and pnpm — no Node installation is needed on the host. The listener
 binds to loopback only; see [`webapp/README.md`](webapp/README.md).
 
-A **Demo** switch in the header swaps your accounts for invented ones, so the app
-can be browsed and screenshotted without an account or a `config.yaml`. The mode
-is held in the URL (`?demo=1`) and every demo response is labelled as such.
+A **Demo** chip in the header swaps your accounts for invented ones, so the app
+can be browsed and screenshotted without an account or a `config.yaml`. The chip
+is both the indicator and the switch, the mode is held in the URL (`?demo=1`),
+and every demo response is labelled as such.
 
 ## Bazel library
 

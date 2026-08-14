@@ -4,21 +4,17 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import ScienceIcon from "@mui/icons-material/Science";
 import type { ReactElement, ReactNode } from "react";
 
 /**
- * The frame every data view shares: heading, demo banner, errors, spinner.
+ * The frame every data view shares: heading, errors, spinner.
  *
- * Refreshing lives in the header, since it refetches every view at once.
- *
- * `demo` is the flag from the response rather than the URL, so the banner
- * always describes what the server actually computed.
+ * Refreshing and the demo indicator both live in the header, so a page never
+ * repeats either one.
  */
 export default function ReportPage({
   title,
   subtitle,
-  demo,
   notice,
   error,
   isFetching,
@@ -28,7 +24,6 @@ export default function ReportPage({
 }: {
   title: string;
   subtitle: string;
-  demo: boolean;
   notice?: ReactNode;
   error: unknown;
   isFetching: boolean;
@@ -45,18 +40,10 @@ export default function ReportPage({
         </Typography>
       </Box>
 
-      {demo ? (
-        <Alert severity="warning" icon={<ScienceIcon />} sx={{ mb: 3 }}>
-          <AlertTitle>Demo data</AlertTitle>
-          Invented accounts and quotes. No Robinhood account was contacted and none
-          of these figures are yours. Turn off Demo in the header for live accounts.
+      {notice && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {notice}
         </Alert>
-      ) : (
-        notice && (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            {notice}
-          </Alert>
-        )
       )}
 
       {error != null && (
