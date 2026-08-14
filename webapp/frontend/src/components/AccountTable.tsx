@@ -6,21 +6,40 @@ import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import type { Account } from "../api";
+import type { Account, Position } from "../api";
 import type { CsvRow } from "../csv";
 import { isNegative, money, shares } from "../format";
+import type { Column } from "../sorting";
+import { useTableView } from "../useTableView";
 import CsvButton from "./CsvButton";
+import SortableHead from "./SortableHead";
+import TableSearch from "./TableSearch";
 import type { ReactElement } from "react";
 
-const CSV_HEADERS = ["Symbol", "Class", "Quantity", "Price", "Value"] as const;
+const COLUMNS: readonly Column<Position>[] = [
+  { id: "symbol", label: "Symbol", value: (row) => row.symbol },
+  { id: "class", label: "Class", value: (row) => row.asset_class },
+  {
+    id: "quantity",
+    label: "Quantity",
+    numeric: true,
+    value: (row) => Number(row.quantity),
+  },
+  { id: "price", label: "Price", numeric: true, value: (row) => Number(row.price) },
+  {
+    id: "value",
+    label: "Value",
+    numeric: true,
+    value: (row) => Number(row.market_value),
+  },
+];
 
 /** The rows as displayed, cash and total included, in exact decimal strings. */
-function csvRows(account: Account): CsvRow[] {
+function csvRows(positions: readonly Position[], account: Account): CsvRow[] {
   return [
-    ...account.positions.map((position) => [
+    ...positions.map((position) => [
       position.symbol,
       position.asset_class,
       position.quantity,
@@ -39,9 +58,18 @@ export default function AccountTable({
   account: Account;
   demo: boolean;
 }): ReactElement {
+  const view = useTableView(account.positions, COLUMNS, "symbol");
+  const numeric = { fontVariantNumeric: "tabular-nums" } as const;
   return (
     <Box sx={{ mb: 3 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ mb: 1 }}
+      >
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {account.label}
         </Typography>
@@ -51,37 +79,41 @@ export default function AccountTable({
           label={account.kind === "robinhood" ? "Robinhood" : "External"}
         />
         <Box sx={{ flexGrow: 1 }} />
+        <TableSearch
+          value={view.query}
+          onChange={view.setQuery}
+          label="symbols"
+        />
+        {/* Exports what is on screen, filtering included. */}
         <CsvButton
           name={["holdings", account.label]}
           demo={demo}
-          headers={CSV_HEADERS}
-          rows={csvRows(account)}
+          headers={COLUMNS.map((column) => column.label)}
+          rows={csvRows(view.rows, account)}
         />
       </Stack>
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Symbol</TableCell>
-              <TableCell>Class</TableCell>
-              <TableCell align="right">Quantity</TableCell>
-              <TableCell align="right">Price</TableCell>
-              <TableCell align="right">Value</TableCell>
-            </TableRow>
-          </TableHead>
+          <SortableHead columns={COLUMNS} view={view} />
           <TableBody>
-            {account.positions.length === 0 && (
+            {view.rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={COLUMNS.length}>
                   <Typography variant="body2" color="text.secondary">
-                    No positions
-                    {account.kind === "robinhood" &&
-                      " — Robinhood returned no equity positions for this account. Verify its number in config.yaml."}
+                    {view.total === 0 ? (
+                      <>
+                        No positions
+                        {account.kind === "robinhood" &&
+                          " — Robinhood returned no equity positions for this account. Verify its number in config.yaml."}
+                      </>
+                    ) : (
+                      `No position matches “${view.query}”`
+                    )}
                   </Typography>
                 </TableCell>
               </TableRow>
             )}
-            {account.positions.map((position) => (
+            {view.rows.map((position) => (
               <TableRow key={position.symbol} hover>
                 <TableCell sx={{ fontWeight: 500 }}>{position.symbol}</TableCell>
                 <TableCell>
@@ -91,13 +123,13 @@ export default function AccountTable({
                     </Typography>
                   )}
                 </TableCell>
-                <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>
+                <TableCell align="right" sx={numeric}>
                   {shares(position.quantity)}
                 </TableCell>
-                <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>
+                <TableCell align="right" sx={numeric}>
                   {money(position.price)}
                 </TableCell>
-                <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>
+                <TableCell align="right" sx={numeric}>
                   {money(position.market_value)}
                 </TableCell>
               </TableRow>
@@ -107,7 +139,7 @@ export default function AccountTable({
               <TableCell
                 align="right"
                 sx={{
-                  fontVariantNumeric: "tabular-nums",
+                  ...numeric,
                   color: isNegative(account.cash) ? "error.main" : undefined,
                 }}
               >
@@ -115,13 +147,11 @@ export default function AccountTable({
               </TableCell>
             </TableRow>
             <TableRow>
+              {/* The account's own total, unaffected by a filter above it. */}
               <TableCell colSpan={4} sx={{ fontWeight: 600 }}>
                 Total
               </TableCell>
-              <TableCell
-                align="right"
-                sx={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}
-              >
+              <TableCell align="right" sx={{ ...numeric, fontWeight: 600 }}>
                 {money(account.total_value)}
               </TableCell>
             </TableRow>

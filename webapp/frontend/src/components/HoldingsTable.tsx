@@ -5,21 +5,39 @@ import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import type { HoldingAccount } from "../api";
+import type { Holding, HoldingAccount } from "../api";
 import type { CsvRow } from "../csv";
 import { isNegative, money, shares } from "../format";
+import type { Column } from "../sorting";
+import { useTableView } from "../useTableView";
 import CsvButton from "./CsvButton";
+import SortableHead from "./SortableHead";
+import TableSearch from "./TableSearch";
 import type { ReactElement } from "react";
 
-const CSV_HEADERS = ["Symbol", "Quantity", "Price", "Value"] as const;
+const COLUMNS: readonly Column<Holding>[] = [
+  { id: "symbol", label: "Symbol", value: (row) => row.symbol },
+  {
+    id: "quantity",
+    label: "Quantity",
+    numeric: true,
+    value: (row) => Number(row.quantity),
+  },
+  { id: "price", label: "Price", numeric: true, value: (row) => Number(row.price) },
+  {
+    id: "value",
+    label: "Value",
+    numeric: true,
+    value: (row) => Number(row.market_value),
+  },
+];
 
 /** The rows as displayed, cash and total included, in exact decimal strings. */
-function csvRows(account: HoldingAccount): CsvRow[] {
+function csvRows(positions: readonly Holding[], account: HoldingAccount): CsvRow[] {
   return [
-    ...account.positions.map((position) => [
+    ...positions.map((position) => [
       position.symbol,
       position.quantity,
       position.price,
@@ -38,6 +56,7 @@ export default function HoldingsTable({
   account: HoldingAccount;
   demo: boolean;
 }): ReactElement {
+  const view = useTableView(account.positions, COLUMNS, "symbol");
   const numeric = { fontVariantNumeric: "tabular-nums" } as const;
   return (
     <Box sx={{ mb: 3 }}>
@@ -45,39 +64,43 @@ export default function HoldingsTable({
         direction="row"
         justifyContent="space-between"
         alignItems="center"
+        spacing={1}
         sx={{ mb: 1 }}
       >
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {account.label}
         </Typography>
-        <CsvButton
-          name={["holdings", account.label]}
-          demo={demo}
-          headers={CSV_HEADERS}
-          rows={csvRows(account)}
-        />
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <TableSearch
+            value={view.query}
+            onChange={view.setQuery}
+            label="symbols"
+          />
+          {/* Exports what is on screen, filtering included. */}
+          <CsvButton
+            name={["holdings", account.label]}
+            demo={demo}
+            headers={COLUMNS.map((column) => column.label)}
+            rows={csvRows(view.rows, account)}
+          />
+        </Stack>
       </Stack>
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Symbol</TableCell>
-              <TableCell align="right">Quantity</TableCell>
-              <TableCell align="right">Price</TableCell>
-              <TableCell align="right">Value</TableCell>
-            </TableRow>
-          </TableHead>
+          <SortableHead columns={COLUMNS} view={view} />
           <TableBody>
-            {account.positions.length === 0 && (
+            {view.rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={COLUMNS.length}>
                   <Typography variant="body2" color="text.secondary">
-                    No equity positions
+                    {view.total === 0
+                      ? "No equity positions"
+                      : `No position matches “${view.query}”`}
                   </Typography>
                 </TableCell>
               </TableRow>
             )}
-            {account.positions.map((position) => (
+            {view.rows.map((position) => (
               <TableRow key={position.symbol} hover>
                 <TableCell sx={{ fontWeight: 500 }}>{position.symbol}</TableCell>
                 <TableCell align="right" sx={numeric}>
@@ -104,6 +127,7 @@ export default function HoldingsTable({
               </TableCell>
             </TableRow>
             <TableRow>
+              {/* The account's own total, unaffected by a filter above it. */}
               <TableCell colSpan={3} sx={{ fontWeight: 600 }}>
                 Total
               </TableCell>

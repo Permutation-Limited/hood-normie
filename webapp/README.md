@@ -34,13 +34,25 @@ Authentication is shared with the CLI — the same token file, created by:
 bazel run //examples:authenticate
 ```
 
-## CSV export
+## Sorting, searching, and CSV export
 
-Every table has a **CSV** button. The download holds the API's exact decimal
-strings rather than the formatted display text, so a spreadsheet receives
-`1000.50`, not `$1,000.50`, and a column totals without cleanup. Holdings
-exports carry the `CASH` and `TOTAL` rows the table shows; plan exports keep the
-sign on `Amount`, as the JSON does.
+Every column header sorts, and each holdings table and the account list carry a
+search box that filters on any column. Money and quantities sort numerically —
+`$9,830` above `$85,650` would be the string answer, not the useful one — and
+values Robinhood did not return sort last rather than as empty text. Sorting a
+column that has unavailable entries ascending therefore keeps them out of the
+way. Sort and search state is per-table and lives in component state, not the
+URL: it changes nothing about which numbers are shown.
+
+Each table's `CASH` and `TOTAL` rows are the account's own, so they stay put and
+keep their full value while a filter narrows the rows above them.
+
+Every table also has a **CSV** button, which exports exactly what is on screen —
+current filter and column order included. The download holds the API's exact
+decimal strings rather than the formatted display text, so a spreadsheet
+receives `1000.50`, not `$1,000.50`, and a column totals without cleanup.
+Holdings exports carry the `CASH` and `TOTAL` rows the table shows; plan exports
+keep the sign on `Amount`, as the JSON does.
 
 Demo exports say so in the filename
 (`hood-normie-holdings-…-demo-2026-08-13.csv`) — a CSV outlives the page that
@@ -222,6 +234,7 @@ bazel test //webapp/...
 
 `//webapp/frontend:typecheck` runs `tsc --noEmit` in strict mode,
 `//webapp/frontend:smoke_test` asserts the bundle is servable,
-`//webapp/frontend:csv_test` covers CSV serialization, and
+`//webapp/frontend:csv_test` and `//webapp/frontend:sorting_test` cover CSV
+serialization and table sorting, and
 `//webapp:server_test` covers the API and the static handler, including directory
 traversal attempts.
