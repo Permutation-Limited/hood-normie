@@ -75,7 +75,7 @@ function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement
 }
 
 export default function Rebalance(): ReactElement {
-  const { data, error, isFetching, refetch, isDemo } = useLiveQuery(
+  const { data, error, isFetching, isDemo } = useLiveQuery(
     "rebalance",
     fetchRebalance,
   );
@@ -101,7 +101,6 @@ export default function Rebalance(): ReactElement {
           ? "Building the demo report…"
           : "Fetching live positions and quotes from Robinhood…"
       }
-      onRefresh={() => void refetch()}
     >
       {data?.portfolios.map((portfolio) => (
         <PortfolioSection key={portfolio.name} portfolio={portfolio} />

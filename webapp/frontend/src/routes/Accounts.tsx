@@ -24,7 +24,7 @@ function Field({ value }: { value: string | null }): ReactElement {
 }
 
 export default function Accounts(): ReactElement {
-  const { data, error, isFetching, refetch, isDemo } = useLiveQuery(
+  const { data, error, isFetching, isDemo } = useLiveQuery(
     "accounts",
     fetchAccounts,
   );
@@ -46,7 +46,6 @@ export default function Accounts(): ReactElement {
       loadingMessage={
         isDemo ? "Building the demo account list…" : "Fetching your accounts…"
       }
-      onRefresh={() => void refetch()}
     >
       {data && (
         <TableContainer component={Paper} variant="outlined">

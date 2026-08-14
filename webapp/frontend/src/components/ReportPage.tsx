@@ -1,16 +1,16 @@
 import Alert from "@mui/material/Alert";
 import AlertTitle from "@mui/material/AlertTitle";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import ScienceIcon from "@mui/icons-material/Science";
 import type { ReactElement, ReactNode } from "react";
 
 /**
- * The frame every data view shares: heading, refresh, demo banner, errors.
+ * The frame every data view shares: heading, demo banner, errors, spinner.
+ *
+ * Refreshing lives in the header, since it refetches every view at once.
  *
  * `demo` is the flag from the response rather than the URL, so the banner
  * always describes what the server actually computed.
@@ -24,7 +24,6 @@ export default function ReportPage({
   isFetching,
   hasData,
   loadingMessage,
-  onRefresh,
   children,
 }: {
   title: string;
@@ -35,32 +34,16 @@ export default function ReportPage({
   isFetching: boolean;
   hasData: boolean;
   loadingMessage: string;
-  onRefresh: () => void;
   children: ReactNode;
 }): ReactElement {
   return (
     <Box>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
-      >
-        <Box>
-          <Typography variant="h5">{title}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {subtitle}
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={isFetching ? <CircularProgress size={16} /> : <RefreshIcon />}
-          onClick={onRefresh}
-          disabled={isFetching}
-        >
-          {isFetching ? "Fetching" : "Refresh"}
-        </Button>
-      </Stack>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h5">{title}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {subtitle}
+        </Typography>
+      </Box>
 
       {demo ? (
         <Alert severity="warning" icon={<ScienceIcon />} sx={{ mb: 3 }}>

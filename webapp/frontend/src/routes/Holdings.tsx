@@ -9,7 +9,7 @@ import { useLiveQuery } from "../useLiveQuery";
 import type { ReactElement } from "react";
 
 export default function Holdings(): ReactElement {
-  const { data, error, isFetching, refetch, isDemo } = useLiveQuery(
+  const { data, error, isFetching, isDemo } = useLiveQuery(
     "holdings",
     fetchHoldings,
   );
@@ -35,7 +35,6 @@ export default function Holdings(): ReactElement {
           ? "Building the demo holdings…"
           : "Fetching live positions and quotes from Robinhood…"
       }
-      onRefresh={() => void refetch()}
     >
       {data?.accounts.map((account) => (
         <HoldingsTable key={account.label} account={account} />

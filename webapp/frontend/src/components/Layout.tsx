@@ -1,12 +1,17 @@
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
 import Container from "@mui/material/Container";
+import IconButton from "@mui/material/IconButton";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Toolbar from "@mui/material/Toolbar";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import ScienceIcon from "@mui/icons-material/Science";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState, useSearch } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import DemoSwitch from "./DemoSwitch";
@@ -21,6 +26,8 @@ const NAV = [
 export default function Layout(): ReactElement {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { demo } = useSearch({ strict: false });
+  const queryClient = useQueryClient();
+  const fetching = useIsFetching() > 0;
   // Unknown paths must not select a tab, or MUI warns about an invalid value.
   const active = NAV.some((item) => item.to === pathname) ? pathname : false;
 
@@ -69,6 +76,23 @@ export default function Layout(): ReactElement {
             ))}
           </Tabs>
           <Box sx={{ flexGrow: 1 }} />
+          <Tooltip title="Refresh every view">
+            {/* A disabled button fires no events, so the tooltip needs a live
+                wrapper to hang off while a fetch is in flight. */}
+            <span>
+              <IconButton
+                size="small"
+                aria-label="Refresh every view"
+                disabled={fetching}
+                // Discards every cached snapshot, not just this tab's: the
+                // header belongs to all of them, so a refresh here must not
+                // leave another tab holding older numbers.
+                onClick={() => void queryClient.invalidateQueries()}
+              >
+                {fetching ? <CircularProgress size={20} /> : <RefreshIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
           {demo && (
             <Chip
               icon={<ScienceIcon />}
