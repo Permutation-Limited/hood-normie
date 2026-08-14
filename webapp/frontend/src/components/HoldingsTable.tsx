@@ -1,5 +1,6 @@
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -8,21 +9,54 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import type { HoldingAccount } from "../api";
+import type { CsvRow } from "../csv";
 import { isNegative, money, shares } from "../format";
+import CsvButton from "./CsvButton";
 import type { ReactElement } from "react";
+
+const CSV_HEADERS = ["Symbol", "Quantity", "Price", "Value"] as const;
+
+/** The rows as displayed, cash and total included, in exact decimal strings. */
+function csvRows(account: HoldingAccount): CsvRow[] {
+  return [
+    ...account.positions.map((position) => [
+      position.symbol,
+      position.quantity,
+      position.price,
+      position.market_value,
+    ]),
+    ["CASH", null, null, account.cash],
+    ["TOTAL", null, null, account.total_value],
+  ];
+}
 
 /** One account's equity positions, cash, and total — the CLI's holdings table. */
 export default function HoldingsTable({
   account,
+  demo,
 }: {
   account: HoldingAccount;
+  demo: boolean;
 }): ReactElement {
   const numeric = { fontVariantNumeric: "tabular-nums" } as const;
   return (
     <Box sx={{ mb: 3 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-        {account.label}
-      </Typography>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 1 }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {account.label}
+        </Typography>
+        <CsvButton
+          name={["holdings", account.label]}
+          demo={demo}
+          headers={CSV_HEADERS}
+          rows={csvRows(account)}
+        />
+      </Stack>
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <TableHead>

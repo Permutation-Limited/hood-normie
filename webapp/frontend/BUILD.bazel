@@ -62,3 +62,11 @@ js_test(
     data = [":dist"],
     entry_point = "tools/check_dist.mjs",
 )
+
+# Imports src/csv.ts directly, so Node has to strip the type annotations.
+js_test(
+    name = "csv_test",
+    data = ["src/csv.ts"],
+    entry_point = "tools/check_csv.mjs",
+    node_options = ["--experimental-strip-types"],
+)

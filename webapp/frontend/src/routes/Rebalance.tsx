@@ -19,7 +19,13 @@ import ReportPage from "../components/ReportPage";
 import { useLiveQuery } from "../useLiveQuery";
 import type { ReactElement } from "react";
 
-function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement {
+function PortfolioSection({
+  portfolio,
+  demo,
+}: {
+  portfolio: Portfolio;
+  demo: boolean;
+}): ReactElement {
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
@@ -54,7 +60,11 @@ function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement
           </Alert>
         )}
 
-        <PlanTable recommendations={portfolio.recommendations} />
+        <PlanTable
+          recommendations={portfolio.recommendations}
+          portfolio={portfolio.name}
+          demo={demo}
+        />
 
         <Accordion variant="outlined" disableGutters sx={{ mt: 2 }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -65,7 +75,11 @@ function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement
           </AccordionSummary>
           <AccordionDetails>
             {portfolio.accounts.map((account) => (
-              <AccountTable key={account.label} account={account} />
+              <AccountTable
+                key={account.label}
+                account={account}
+                demo={demo}
+              />
             ))}
           </AccordionDetails>
         </Accordion>
@@ -103,7 +117,11 @@ export default function Rebalance(): ReactElement {
       }
     >
       {data?.portfolios.map((portfolio) => (
-        <PortfolioSection key={portfolio.name} portfolio={portfolio} />
+        <PortfolioSection
+          key={portfolio.name}
+          portfolio={portfolio}
+          demo={data.demo}
+        />
       ))}
 
       {data && data.portfolios.length > 1 && (

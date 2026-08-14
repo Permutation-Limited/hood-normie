@@ -10,13 +10,34 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import type { Account } from "../api";
+import type { CsvRow } from "../csv";
 import { isNegative, money, shares } from "../format";
+import CsvButton from "./CsvButton";
 import type { ReactElement } from "react";
+
+const CSV_HEADERS = ["Symbol", "Class", "Quantity", "Price", "Value"] as const;
+
+/** The rows as displayed, cash and total included, in exact decimal strings. */
+function csvRows(account: Account): CsvRow[] {
+  return [
+    ...account.positions.map((position) => [
+      position.symbol,
+      position.asset_class,
+      position.quantity,
+      position.price,
+      position.market_value,
+    ]),
+    ["CASH", null, null, null, account.cash],
+    ["TOTAL", null, null, null, account.total_value],
+  ];
+}
 
 export default function AccountTable({
   account,
+  demo,
 }: {
   account: Account;
+  demo: boolean;
 }): ReactElement {
   return (
     <Box sx={{ mb: 3 }}>
@@ -28,6 +49,13 @@ export default function AccountTable({
           size="small"
           variant="outlined"
           label={account.kind === "robinhood" ? "Robinhood" : "External"}
+        />
+        <Box sx={{ flexGrow: 1 }} />
+        <CsvButton
+          name={["holdings", account.label]}
+          demo={demo}
+          headers={CSV_HEADERS}
+          rows={csvRows(account)}
         />
       </Stack>
       <TableContainer component={Paper} variant="outlined">

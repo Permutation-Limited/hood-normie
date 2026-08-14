@@ -34,6 +34,24 @@ Authentication is shared with the CLI — the same token file, created by:
 bazel run //examples:authenticate
 ```
 
+## CSV export
+
+Every table has a **CSV** button. The download holds the API's exact decimal
+strings rather than the formatted display text, so a spreadsheet receives
+`1000.50`, not `$1,000.50`, and a column totals without cleanup. Holdings
+exports carry the `CASH` and `TOTAL` rows the table shows; plan exports keep the
+sign on `Amount`, as the JSON does.
+
+Demo exports say so in the filename
+(`hood-normie-holdings-…-demo-2026-08-13.csv`) — a CSV outlives the page that
+produced it and carries no banner, so the filename is the only place left to
+mark invented numbers.
+
+Fields that a spreadsheet would evaluate rather than display (`=`, `@`, and the
+like) are prefixed with a quote on the way out; negative amounts are exempt,
+since they are data. `//webapp/frontend:csv_test` covers that and the quoting
+rules.
+
 ## Demo mode
 
 The **Demo** switch in the header replaces your accounts with invented ones:
@@ -197,6 +215,7 @@ bazel test //webapp/...
 ```
 
 `//webapp/frontend:typecheck` runs `tsc --noEmit` in strict mode,
-`//webapp/frontend:smoke_test` asserts the bundle is servable, and
+`//webapp/frontend:smoke_test` asserts the bundle is servable,
+`//webapp/frontend:csv_test` covers CSV serialization, and
 `//webapp:server_test` covers the API and the static handler, including directory
 traversal attempts.

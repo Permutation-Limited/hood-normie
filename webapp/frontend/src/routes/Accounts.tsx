@@ -1,3 +1,4 @@
+import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -7,9 +8,17 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { fetchAccounts } from "../api";
+import CsvButton from "../components/CsvButton";
 import ReportPage from "../components/ReportPage";
 import { useLiveQuery } from "../useLiveQuery";
 import type { ReactElement } from "react";
+
+const CSV_HEADERS = [
+  "Tax status",
+  "Type",
+  "Account number",
+  "Nickname",
+] as const;
 
 /** Robinhood omits fields freely; the CLI prints "(unavailable)" for them. */
 function Field({ value }: { value: string | null }): ReactElement {
@@ -47,6 +56,22 @@ export default function Accounts(): ReactElement {
         isDemo ? "Building the demo account list…" : "Fetching your accounts…"
       }
     >
+      {data && (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+          <CsvButton
+            name={["accounts"]}
+            demo={data.demo}
+            headers={CSV_HEADERS}
+            rows={data.accounts.map((account) => [
+              account.tax_status,
+              account.account_type,
+              account.account_number,
+              account.nickname,
+            ])}
+          />
+        </Box>
+      )}
+
       {data && (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">

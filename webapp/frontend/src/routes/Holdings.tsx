@@ -37,7 +37,11 @@ export default function Holdings(): ReactElement {
       }
     >
       {data?.accounts.map((account) => (
-        <HoldingsTable key={account.label} account={account} />
+        <HoldingsTable
+          key={account.label}
+          account={account}
+          demo={data.demo}
+        />
       ))}
 
       {data && data.accounts.length > 1 && (
