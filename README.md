@@ -78,6 +78,8 @@ The detailed rebalancer configuration is documented in
 
 ## Web app
 
+![Rebalance tab](webapp/screenshots/rebalance.png)
+
 The same three views, in a browser — accounts, holdings, and the rebalance
 report, one tab each:
 

@@ -8,3 +8,4 @@ __pycache__/
 /snapshot.json
 node_modules/
 /webapp/frontend/dist/
+.DS_store
