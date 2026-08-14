@@ -47,6 +47,11 @@ URL: it changes nothing about which numbers are shown.
 Each table's `CASH` and `TOTAL` rows are the account's own, so they stay put and
 keep their full value while a filter narrows the rows above them.
 
+Rebalance plan rows are tinted by direction — buys green, sells red, ignored
+classes untinted — so the shape of a plan reads at a glance. The tint is faint
+and never the only signal: the chip in the first cell still spells the direction
+out.
+
 Every table also has a **CSV** button, which exports exactly what is on screen —
 current filter and column order included. The download holds the API's exact
 decimal strings rather than the formatted display text, so a spreadsheet
@@ -73,8 +78,8 @@ http://127.0.0.1:8765/rebalance?demo=1
 ```
 
 The chip is both the indicator and the switch, and it always names the state you
-are in rather than the one it would switch to: filled amber "Demo data" on, a
-quiet outlined "Live data" off. A glance at the header answers "am I looking at
+are in rather than the one it would switch to: filled amber "Demo data" on, an
+outlined green "Live data" off. A glance at the header answers "am I looking at
 my own money?" without interpreting a control. It is the only place the app says
 anything about demo mode, so no second badge or banner can disagree with it, and
 it stays on screen on every tab.

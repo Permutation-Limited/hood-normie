@@ -11,7 +11,7 @@ import type { ReactElement } from "react";
  * The chip always names the current state — "Demo data" or "Live data" — never
  * the state it would switch to, so a glance at the header answers "am I looking
  * at my own money?" without having to interpret a control. Demo is the
- * exceptional state and wears filled amber; live is a quiet outline.
+ * exceptional state and wears filled amber; live is an outlined green.
  *
  * The state is a URL search param rather than component state, so a demo view
  * can be linked, bookmarked, and survives a reload — and so nothing can show
@@ -31,7 +31,7 @@ export default function DemoChip({ demo }: { demo: boolean }): ReactElement {
         icon={demo ? <ScienceIcon /> : <SensorsIcon />}
         label={demo ? "Demo data" : "Live data"}
         size="small"
-        color={demo ? "warning" : "default"}
+        color={demo ? "warning" : "success"}
         variant={demo ? "filled" : "outlined"}
         aria-pressed={demo}
         onClick={() => {

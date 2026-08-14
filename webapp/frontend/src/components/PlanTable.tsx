@@ -6,6 +6,8 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
+import { alpha } from "@mui/material/styles";
+import type { SxProps, Theme } from "@mui/material/styles";
 import type { Action, Recommendation } from "../api";
 import { money, moneyAbs } from "../format";
 import type { Column } from "../sorting";
@@ -43,12 +45,37 @@ const COLUMNS: readonly Column<Recommendation>[] = [
   },
 ];
 
-function ActionChip({ action }: { action: Action }): ReactElement {
-  if (action === "") {
-    // Ignored or unclassified: the rebalancer assumes no trade at all.
-    return <Chip label="IGNORED" size="small" variant="outlined" />;
+/** Palette entry a row is tinted with, or null for a row with no trade. */
+function actionColor(action: Action): "success" | "error" | null {
+  return action === "BUY" ? "success" : action === "SELL" ? "error" : null;
+}
+
+/**
+ * Tints a row by its direction, buys green and sells red.
+ *
+ * Kept faint: it groups the plan at a glance, and the chip in the first cell
+ * still carries the direction in words for anyone the color does not reach.
+ */
+function rowSx(action: Action): SxProps<Theme> | undefined {
+  const color = actionColor(action);
+  if (color === null) {
+    return undefined;
   }
-  const color = action === "BUY" ? "success" : action === "SELL" ? "error" : "default";
+  return {
+    backgroundColor: (theme: Theme) => alpha(theme.palette[color].main, 0.08),
+    // Overrides MUI's own hover shade, which would otherwise wash out the tint.
+    "&.MuiTableRow-hover:hover": {
+      backgroundColor: (theme: Theme) => alpha(theme.palette[color].main, 0.16),
+    },
+  };
+}
+
+function ActionChip({ action }: { action: Action }): ReactElement {
+  const color = actionColor(action);
+  if (color === null) {
+    // Ignored, unclassified, or HOLD: the rebalancer assumes no trade at all.
+    return <Chip label={actionLabel(action)} size="small" variant="outlined" />;
+  }
   return <Chip label={action} size="small" color={color} />;
 }
 
@@ -85,7 +112,7 @@ export default function PlanTable({
           <SortableHead columns={COLUMNS} view={view} />
           <TableBody>
             {view.rows.map((item) => (
-              <TableRow key={item.asset_class} hover>
+              <TableRow key={item.asset_class} hover sx={rowSx(item.action)}>
                 <TableCell>
                   <ActionChip action={item.action} />
                 </TableCell>
