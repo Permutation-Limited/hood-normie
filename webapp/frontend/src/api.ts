@@ -51,13 +51,53 @@ export interface RebalanceReport {
   portfolios: Portfolio[];
 }
 
+/** One row of the account list, mirroring `//examples:list_accounts`. */
+export interface AccountSummary {
+  tax_status: string | null;
+  account_type: string | null;
+  account_number: string | null;
+  nickname: string | null;
+}
+
+export interface AccountsReport {
+  generated_at: string;
+  demo: boolean;
+  accounts: AccountSummary[];
+}
+
+export interface Holding {
+  symbol: string;
+  quantity: string;
+  price: string;
+  market_value: string;
+}
+
+/** One account's marked holdings, mirroring `//examples:list_holdings`. */
+export interface HoldingAccount {
+  label: string;
+  account_number: string | null;
+  cash: string;
+  total_value: string;
+  positions: Holding[];
+}
+
+export interface HoldingsReport {
+  generated_at: string;
+  demo: boolean;
+  grand_total: string;
+  accounts: HoldingAccount[];
+}
+
 export class ApiError extends Error {}
 
-export async function fetchRebalance(
-  options: { demo?: boolean; signal?: AbortSignal } = {},
-): Promise<RebalanceReport> {
+interface FetchOptions {
+  demo?: boolean;
+  signal?: AbortSignal;
+}
+
+async function get<T>(path: string, options: FetchOptions): Promise<T> {
   const query = options.demo ? "?demo=1" : "";
-  const response = await fetch(`/api/rebalance${query}`, {
+  const response = await fetch(`${path}${query}`, {
     signal: options.signal ?? null,
   });
   const body: unknown = await response.json().catch(() => null);
@@ -68,5 +108,23 @@ export async function fetchRebalance(
         : `request failed with status ${response.status}`;
     throw new ApiError(detail);
   }
-  return body as RebalanceReport;
+  return body as T;
+}
+
+export async function fetchRebalance(
+  options: FetchOptions = {},
+): Promise<RebalanceReport> {
+  return get<RebalanceReport>("/api/rebalance", options);
+}
+
+export async function fetchAccounts(
+  options: FetchOptions = {},
+): Promise<AccountsReport> {
+  return get<AccountsReport>("/api/accounts", options);
+}
+
+export async function fetchHoldings(
+  options: FetchOptions = {},
+): Promise<HoldingsReport> {
+  return get<HoldingsReport>("/api/holdings", options);
 }

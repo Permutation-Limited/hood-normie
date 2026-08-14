@@ -2,7 +2,7 @@
 
 from typing import Iterable, NotRequired, TypedDict
 
-from hood_normie.accounts import select_account
+from hood_normie.accounts import account_label, account_number, account_records, select_account
 from hood_normie.mcp import RobinhoodMcpClient
 from hood_normie.oauth import DEFAULT_ENDPOINT, load_access_token
 from hood_normie.types import JsonObject, JsonValue, MoneyValue
@@ -28,6 +28,12 @@ class NormalizedAccountWithPrices(NormalizedAccount):
 class PortfolioSnapshot(TypedDict):
     accounts: list[NormalizedAccount]
     prices: dict[str, MoneyValue]
+
+
+class LabeledAccount(NormalizedAccount):
+    """A normalized account carrying the heading a reader identifies it by."""
+
+    label: str
 
 
 class RobinhoodClient:
@@ -96,6 +102,45 @@ class RobinhoodClient:
                 "account_number": account_number,
             })
         return {"accounts": normalized_accounts, "prices": normalize_quotes(quotes)}
+
+    def fetch_holdings(
+        self, account_numbers: Iterable[str] = ()
+    ) -> list["LabeledAccount"]:
+        """Fetch every requested account's marked positions, cash, and label.
+
+        With no account numbers, every account the user has is listed, unlike
+        `fetch_portfolios`, which picks one when the caller configured none.
+        """
+        self.connect()
+        records = account_records(self.get_accounts())
+        by_number = {
+            str(number): account for account in records
+            if (number := account_number(account)) is not None
+        }
+        selected = [str(value) for value in account_numbers] or list(by_number)
+        if not selected:
+            raise ValueError("Robinhood returned no accounts with an account number")
+
+        raw: list[tuple[str, JsonValue, JsonValue]] = []
+        symbols: set[str] = set()
+        for number in selected:
+            portfolio = self.get_portfolio(number)
+            positions = self.get_equity_positions(number)
+            raw.append((number, portfolio, positions))
+            symbols.update(position_symbols(positions))
+        quotes = self.get_equity_quotes(symbols)
+
+        holdings: list[LabeledAccount] = []
+        for number, portfolio, positions in raw:
+            normalized = normalize_account(portfolio, positions, quotes)
+            holdings.append({
+                "label": account_label(number, by_number.get(number)),
+                "account_number": number,
+                "net_liquidation_value": normalized["net_liquidation_value"],
+                "cash": normalized["cash"],
+                "positions": normalized["positions"],
+            })
+        return holdings
 
 
 def normalize_account(

@@ -13,7 +13,11 @@ import os
 from typing import Mapping
 
 from examples.rebalance.report import Report, build_report
-from hood_normie.client import NormalizedAccount, NormalizedPosition, PortfolioSnapshot
+from hood_normie.accounts import account_label
+from hood_normie.client import (
+    LabeledAccount, NormalizedAccount, NormalizedPosition, PortfolioSnapshot,
+)
+from hood_normie.types import JsonObject, JsonValue
 
 
 CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_config.yaml")
@@ -52,6 +56,23 @@ CASH: Mapping[str, str] = {
     "DEMO-IRA": "1120.40",
 }
 
+# Shaped like `get_accounts` records, so the accounts view parses demo data
+# through exactly the code path a live response goes through.
+ACCOUNTS: list[JsonObject] = [
+    {
+        "account_number": "DEMO-TAXABLE",
+        "tax_status": "Individual",
+        "account_type": "margin",
+        "nickname": "Demo Brokerage",
+    },
+    {
+        "account_number": "DEMO-IRA",
+        "retirement_account_type": "Roth IRA",
+        "account_type": "cash",
+        "nickname": "Demo Retirement",
+    },
+]
+
 
 def fetch(*, endpoint: str, account_numbers: list[str], symbols: list[str],
           token_file: str, verbose: bool = False) -> PortfolioSnapshot:
@@ -81,3 +102,25 @@ def fetch(*, endpoint: str, account_numbers: list[str], symbols: list[str],
 def build_demo_report() -> Report:
     """Build the report from demo config and demo holdings."""
     return build_report(config_path=CONFIG, token_file="", fetch=fetch)
+
+
+def demo_accounts() -> JsonValue:
+    """Stand in for `get_accounts`, matching the payload shape it returns."""
+    return [dict(account) for account in ACCOUNTS]
+
+
+def demo_holdings() -> list[LabeledAccount]:
+    """Stand in for `RobinhoodClient.fetch_holdings`, matching its shape."""
+    by_number = {str(account["account_number"]): account for account in ACCOUNTS}
+    snapshot = fetch(endpoint="", account_numbers=[], symbols=[], token_file="")
+    holdings: list[LabeledAccount] = []
+    for account in snapshot["accounts"]:
+        number = str(account.get("account_number"))
+        holdings.append({
+            "label": account_label(number, by_number.get(number)),
+            "account_number": number,
+            "net_liquidation_value": account["net_liquidation_value"],
+            "cash": account["cash"],
+            "positions": account["positions"],
+        })
+    return holdings

@@ -4,23 +4,19 @@ import AccordionSummary from "@mui/material/AccordionSummary";
 import Alert from "@mui/material/Alert";
 import AlertTitle from "@mui/material/AlertTitle";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import ScienceIcon from "@mui/icons-material/Science";
-import { useQuery } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
 import type { Portfolio } from "../api";
 import { fetchRebalance } from "../api";
 import { money } from "../format";
 import AccountTable from "../components/AccountTable";
 import PlanTable from "../components/PlanTable";
+import ReportPage from "../components/ReportPage";
+import { useLiveQuery } from "../useLiveQuery";
 import type { ReactElement } from "react";
 
 function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement {
@@ -79,81 +75,34 @@ function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement
 }
 
 export default function Rebalance(): ReactElement {
-  const { demo } = useSearch({ strict: false });
-  const isDemo = Boolean(demo);
-  const { data, error, isFetching, refetch } = useQuery({
-    // Demo is part of the key: switching modes must refetch, never reuse.
-    queryKey: ["rebalance", isDemo],
-    queryFn: ({ signal }) => fetchRebalance({ demo: isDemo, signal }),
-    // Quotes are live: every view is a fresh snapshot, never a cached one.
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
+  const { data, error, isFetching, refetch, isDemo } = useLiveQuery(
+    "rebalance",
+    fetchRebalance,
+  );
 
   return (
-    <Box>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
-      >
-        <Box>
-          <Typography variant="h5">Rebalance</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {data
-              ? `Snapshot taken ${new Date(data.generated_at).toLocaleString()}`
-              : isDemo
-                ? "Invented portfolios, no account contacted"
-                : "Live Robinhood quotes and positions"}
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={isFetching ? <CircularProgress size={16} /> : <RefreshIcon />}
-          onClick={() => void refetch()}
-          disabled={isFetching}
-        >
-          {isFetching ? "Fetching" : "Refresh"}
-        </Button>
-      </Stack>
-
-      {/* Driven by the response, not the URL: whatever the server actually
-          computed is what gets labelled. */}
-      {data?.demo ? (
-        <Alert severity="warning" icon={<ScienceIcon />} sx={{ mb: 3 }}>
-          <AlertTitle>Demo data</AlertTitle>
-          Invented portfolios and quotes. No Robinhood account was contacted and
-          none of these figures are yours. Turn off Demo in the header for live
-          accounts.
-        </Alert>
-      ) : (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Read-only. These are class-level dollar amounts, not orders — the tool
-          does not choose a security and never places a trade.
-        </Alert>
-      )}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          <AlertTitle>Could not build the report</AlertTitle>
-          {error instanceof Error ? error.message : String(error)}
-        </Alert>
-      )}
-
-      {isFetching && !data && (
-        <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 6 }}>
-          <CircularProgress size={24} />
-          <Typography color="text.secondary">
-            {isDemo
-              ? "Building the demo report…"
-              : "Fetching live positions and quotes from Robinhood…"}
-          </Typography>
-        </Stack>
-      )}
-
+    <ReportPage
+      title="Rebalance"
+      subtitle={
+        data
+          ? `Snapshot taken ${new Date(data.generated_at).toLocaleString()}`
+          : isDemo
+            ? "Invented portfolios, no account contacted"
+            : "Live Robinhood quotes and positions"
+      }
+      demo={Boolean(data?.demo)}
+      notice="Read-only. These are class-level dollar amounts, not orders — the tool
+        does not choose a security and never places a trade."
+      error={error}
+      isFetching={isFetching}
+      hasData={Boolean(data)}
+      loadingMessage={
+        isDemo
+          ? "Building the demo report…"
+          : "Fetching live positions and quotes from Robinhood…"
+      }
+      onRefresh={() => void refetch()}
+    >
       {data?.portfolios.map((portfolio) => (
         <PortfolioSection key={portfolio.name} portfolio={portfolio} />
       ))}
@@ -169,6 +118,6 @@ export default function Rebalance(): ReactElement {
           </Stack>
         </>
       )}
-    </Box>
+    </ReportPage>
   );
 }

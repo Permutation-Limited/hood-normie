@@ -78,7 +78,8 @@ The detailed rebalancer configuration is documented in
 
 ## Web app
 
-The same report, in a browser:
+The same three views, in a browser — accounts, holdings, and the rebalance
+report, one tab each:
 
 ```sh
 bazel run //webapp:server

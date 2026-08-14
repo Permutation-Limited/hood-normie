@@ -8,10 +8,8 @@ import sys
 from examples.paths import workspace_path
 from examples.terminal import Style, color_enabled
 from hood_normie import RobinhoodClient
-from hood_normie.accounts import account_number, account_records, first
-from hood_normie.client import NormalizedPosition, normalize_account, position_symbols
+from hood_normie.client import NormalizedPosition
 from hood_normie.oauth import DEFAULT_ENDPOINT, DEFAULT_TOKEN_FILE, OAuthError
-from hood_normie.types import JsonValue
 
 
 def main() -> int:
@@ -36,56 +34,11 @@ def main() -> int:
               if token else RobinhoodClient.from_token_file(
                   token_file, endpoint=args.endpoint, verbose=args.verbose
               ))
-    client.connect()
-    accounts = account_records(client.get_accounts())
-    accounts_by_number = {
-        str(number): account for account in accounts
-        if (number := account_number(account)) is not None
-    }
-    selected = args.account or _all_account_numbers(accounts)
-
-    raw_accounts: list[tuple[str, JsonValue, JsonValue]] = []
-    symbols: set[str] = set()
-    for number in selected:
-        portfolio = client.get_portfolio(number)
-        positions = client.get_equity_positions(number)
-        raw_accounts.append((number, portfolio, positions))
-        symbols.update(position_symbols(positions))
-    quotes = client.get_equity_quotes(symbols)
-
-    for index, (number, portfolio, positions) in enumerate(raw_accounts):
-        normalized = normalize_account(portfolio, positions, quotes)
+    for index, account in enumerate(client.fetch_holdings(args.account or ())):
         if index:
             print()
-        label = _account_label(number, accounts_by_number.get(number))
-        print_holdings(label, normalized["positions"], normalized["cash"], style)
+        print_holdings(account["label"], account["positions"], account["cash"], style)
     return 0
-
-
-def _all_account_numbers(accounts: object) -> list[str]:
-    records = account_records(accounts)
-    numbers = [account_number(account) for account in records]
-    result = [str(number) for number in numbers if number is not None]
-    if not result:
-        raise ValueError("Robinhood returned no accounts with an account number")
-    return result
-
-
-def _account_label(number: str, account: dict[str, JsonValue] | None) -> str:
-    if account is None:
-        return number
-    tax_status = first(
-        account, "tax_status", "taxStatus", "tax_type", "taxType",
-        "retirement_account_type", "retirementAccountType",
-        "brokerage_account_type", "brokerageAccountType",
-    )
-    nickname = first(account, "nickname", "display_name", "displayName", "name")
-    parts = [
-        str(value) for value in (tax_status, nickname)
-        if isinstance(value, (str, int, float)) and not isinstance(value, bool)
-    ]
-    parts.append(number)
-    return " · ".join(parts)
 
 
 def print_holdings(

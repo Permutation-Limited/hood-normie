@@ -4,6 +4,8 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import Layout from "./components/Layout";
+import Accounts from "./routes/Accounts";
+import Holdings from "./routes/Holdings";
 import Home from "./routes/Home";
 import Rebalance from "./routes/Rebalance";
 
@@ -33,7 +35,24 @@ const rebalanceRoute = createRoute({
   component: Rebalance,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, rebalanceRoute]);
+const accountsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/accounts",
+  component: Accounts,
+});
+
+const holdingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/holdings",
+  component: Holdings,
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  accountsRoute,
+  holdingsRoute,
+  rebalanceRoute,
+]);
 
 export const router = createRouter({ routeTree });
 

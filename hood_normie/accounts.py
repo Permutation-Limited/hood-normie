@@ -1,6 +1,30 @@
 """Parse and select accounts from Robinhood MCP responses."""
 
+from typing import TypedDict
+
 from hood_normie.types import JsonObject, JsonValue, is_json_value
+
+
+TAX_STATUS_FIELDS = (
+    "tax_status", "taxStatus", "tax_type", "taxType",
+    "retirement_account_type", "retirementAccountType",
+    "brokerage_account_type", "brokerageAccountType",
+)
+ACCOUNT_TYPE_FIELDS = ("account_type", "accountType", "type")
+NICKNAME_FIELDS = ("nickname", "display_name", "displayName", "name")
+
+
+class AccountSummary(TypedDict):
+    """The identifying fields the CLI table and the web API both present.
+
+    A field is None when Robinhood omitted it or returned something that is not
+    a scalar; each renderer decides how to say "unavailable".
+    """
+
+    tax_status: str | None
+    account_type: str | None
+    account_number: str | None
+    nickname: str | None
 
 
 def select_account(payload: object) -> str:
@@ -79,6 +103,33 @@ def account_name(account: JsonObject) -> str:
         "account_type", "accountType", "type",
     )
     return str(value) if value is not None else "Unnamed account"
+
+
+def account_summary(account: JsonObject) -> AccountSummary:
+    """Pull the fields that identify an account, across MCP naming variants."""
+    return {
+        "tax_status": text(first(account, *TAX_STATUS_FIELDS)),
+        "account_type": text(first(account, *ACCOUNT_TYPE_FIELDS)),
+        "account_number": text(account_number(account)),
+        "nickname": text(first(account, *NICKNAME_FIELDS)),
+    }
+
+
+def account_label(number: str, account: JsonObject | None) -> str:
+    """A human-readable heading for one account's holdings."""
+    if account is None:
+        return number
+    summary = account_summary(account)
+    parts = [value for value in (summary["tax_status"], summary["nickname"]) if value]
+    parts.append(number)
+    return " · ".join(parts)
+
+
+def text(value: object) -> str | None:
+    """Render a scalar field, or None for a missing or non-scalar one."""
+    if value is None or isinstance(value, (dict, list, bool)):
+        return None
+    return str(value)
 
 
 def first(record: JsonObject, *keys: str) -> JsonValue:

@@ -1,9 +1,17 @@
 # Local web app
 
-A locally hosted browser view over the same read-only rebalancer the CLI uses.
-A Python server hosts the built single-page app and answers a small JSON API; the
+A locally hosted browser view over the same read-only tools the CLI uses. A
+Python server hosts the built single-page app and answers a small JSON API; the
 app is React + TypeScript + MUI, routed with TanStack Router and fetching with
 TanStack Query. Everything builds under Bazel.
+
+Each tab is one of the command-line tools:
+
+| Tab | Endpoint | Command-line equivalent |
+| --- | --- | --- |
+| Accounts | `/api/accounts` | `bazel run //examples:list_accounts` |
+| Holdings | `/api/holdings` | `bazel run //examples:list_holdings` |
+| Rebalance | `/api/rebalance` | `bazel run //examples/rebalance` |
 
 It **does not place orders**. There is no endpoint that could.
 
@@ -41,7 +49,8 @@ itself from that field rather than from the URL, so the banner reflects what the
 server actually computed.
 
 A demo request reads `webapp/demo_config.yaml` and the invented snapshot in
-`webapp/demo.py`. It contacts nothing, reads no token, and never opens your
+`webapp/demo.py`, whose `ACCOUNTS` records stand in for `get_accounts` on the
+Accounts and Holdings tabs. It contacts nothing, reads no token, and never opens your
 `config.yaml`, so demo mode works on a machine that has never authenticated. The
 computation is the real one — same report module as a live run — so the demo
 exercises margin cash targets, a fixed-dollar class, an ignored class, an
@@ -56,18 +65,61 @@ build rather than the page.
 
 | Path | What it is |
 | --- | --- |
-| `server.py` | HTTP server: static assets, SPA fallback, `/api/rebalance` |
+| `server.py` | HTTP server: static assets, SPA fallback, the `/api` endpoints |
 | `api.py` | Report-to-JSON serialization |
 | `demo.py`, `demo_config.yaml` | Invented data behind the header's Demo switch |
 | `frontend/` | Vite + React + TypeScript sources |
 
-The numbers come from `//examples/rebalance:report`, the same module the terminal
-rebalancer renders from, so the browser and the CLI cannot disagree.
+The numbers come from `//examples/rebalance:report` and
+`RobinhoodClient.fetch_holdings`, the same modules the terminal tools render
+from, so the browser and the CLI cannot disagree.
 
 ## The API
 
-`GET /api/rebalance` runs a live fetch and returns one object per configured
-portfolio. Add `?demo=1` for invented data:
+Every endpoint runs one live fetch per request and takes `?demo=1` for invented
+data. Money is always a decimal string, never a JSON number, so exact cents
+survive the trip.
+
+`GET /api/accounts` lists the accounts the token can read. A field is `null`
+where Robinhood returned nothing; the CLI prints `(unavailable)` for the same
+case.
+
+```json
+{
+  "generated_at": "2026-08-13T22:57:53.974583+00:00",
+  "demo": false,
+  "accounts": [
+    {"tax_status": "individual", "account_type": "margin",
+     "account_number": "111", "nickname": null}
+  ]
+}
+```
+
+`GET /api/holdings` marks each account's equity positions at the latest quote.
+`total_value` is the marked positions plus cash, so the rows add up to the total
+shown beneath them rather than to a separately reported broker figure.
+
+```json
+{
+  "generated_at": "2026-08-13T22:57:53.974583+00:00",
+  "demo": false,
+  "grand_total": "2050",
+  "accounts": [
+    {
+      "label": "individual · Main · 111",
+      "account_number": "111",
+      "cash": "1000",
+      "total_value": "2050",
+      "positions": [
+        {"symbol": "VTI", "quantity": "10", "price": "100",
+         "market_value": "1000"}
+      ]
+    }
+  ]
+}
+```
+
+`GET /api/rebalance` returns one object per configured portfolio:
 
 ```json
 {
@@ -102,9 +154,8 @@ portfolio. Add `?demo=1` for invented data:
 }
 ```
 
-Money is always a decimal string, never a JSON number, so exact cents survive the
-trip. Unlike the CLI's `--json`, `amount` keeps its sign; `action` carries the
-same direction either way.
+Unlike the CLI's `--json`, `amount` keeps its sign; `action` carries the same
+direction either way.
 
 Errors return a JSON `error` field: `400` for a bad or missing config, `401` when
 the OAuth token needs refreshing, `502` when Robinhood is unreachable. Demo

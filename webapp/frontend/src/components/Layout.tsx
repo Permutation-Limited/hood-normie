@@ -13,6 +13,8 @@ import DemoSwitch from "./DemoSwitch";
 
 const NAV = [
   { label: "Home", to: "/" },
+  { label: "Accounts", to: "/accounts" },
+  { label: "Holdings", to: "/holdings" },
   { label: "Rebalance", to: "/rebalance" },
 ] as const;
 

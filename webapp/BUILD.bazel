@@ -10,7 +10,10 @@ filegroup(
 py_library(
     name = "api",
     srcs = ["__init__.py", "api.py"],
-    deps = ["//examples/rebalance:report"],
+    deps = [
+        "//examples/rebalance:report",
+        "//hood_normie",
+    ],
 )
 
 py_library(

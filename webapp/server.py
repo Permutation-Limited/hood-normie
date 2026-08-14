@@ -1,6 +1,8 @@
 """Local web server for the hood-normie single-page app.
 
-Serves the Vite bundle as static files and exposes the rebalance report as JSON.
+Serves the Vite bundle as static files and exposes the rebalance report, the
+account list, and per-account holdings as JSON — the same three views the
+`//examples` command-line tools print.
 Read-only, like everything else in this repo: it computes and reports, and has no
 endpoint that could place an order.
 
@@ -22,9 +24,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from examples.paths import workspace_path
 from examples.rebalance.report import DEFAULT_ENDPOINT, Report, build_report
+from hood_normie import RobinhoodClient
+from hood_normie.accounts import account_records
+from hood_normie.client import LabeledAccount
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
+from hood_normie.types import JsonValue
 from webapp import demo as demo_data
-from webapp.api import report_json
+from webapp.api import accounts_json, holdings_json, report_json
 
 
 DEFAULT_PORT = 8765
@@ -32,6 +38,9 @@ DEFAULT_CONFIG = "config.yaml"
 INDEX = "index.html"
 
 ReportBuilder = Callable[[bool], Report]
+# The raw `get_accounts` payload; the handler parses it, exactly as the CLI does.
+AccountsBuilder = Callable[[bool], JsonValue]
+HoldingsBuilder = Callable[[bool], list[LabeledAccount]]
 DEMO_VALUES = frozenset({"1", "true", "yes"})
 
 
@@ -49,23 +58,36 @@ class Handler(BaseHTTPRequestHandler):
 
     static_root: str
     build: ReportBuilder
+    build_accounts: AccountsBuilder
+    build_holdings: HoldingsBuilder
     # One live fetch at a time: concurrent refreshes would multiply Robinhood
     # requests for no benefit, since every caller wants the same snapshot.
     lock = threading.Lock()
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        demo = _is_demo(parsed.query)
         if parsed.path == "/api/rebalance":
-            self.serve_report(demo=_is_demo(parsed.query))
+            self.serve_fetch(lambda: report_json(self.build(demo), demo=demo))
+        elif parsed.path == "/api/accounts":
+            self.serve_fetch(
+                lambda: accounts_json(account_records(self.build_accounts(demo)),
+                                      demo=demo)
+            )
+        elif parsed.path == "/api/holdings":
+            self.serve_fetch(
+                lambda: holdings_json(self.build_holdings(demo), demo=demo)
+            )
         elif parsed.path.startswith("/api/"):
             self.send_json({"error": f"unknown endpoint {parsed.path}"}, status=404)
         else:
             self.serve_static(parsed.path)
 
-    def serve_report(self, demo: bool) -> None:
+    def serve_fetch(self, produce: Callable[[], object]) -> None:
+        """Run one live fetch and answer with its JSON, or with why it failed."""
         try:
             with self.lock:
-                payload = report_json(self.build(demo), demo=demo)
+                payload = produce()
         except FileNotFoundError as error:
             # Demo mode needs no config, so reaching live data without one is an
             # ordinary first-run state rather than a server fault.
@@ -136,9 +158,14 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{self.address_string()} {format % args}\n")
 
 
-def make_handler(static_root: str, build: ReportBuilder) -> type[Handler]:
+def make_handler(static_root: str, build: ReportBuilder,
+                 build_accounts: AccountsBuilder,
+                 build_holdings: HoldingsBuilder) -> type[Handler]:
     return type("BoundHandler", (Handler,), {
-        "static_root": static_root, "build": staticmethod(build),
+        "static_root": static_root,
+        "build": staticmethod(build),
+        "build_accounts": staticmethod(build_accounts),
+        "build_holdings": staticmethod(build_holdings),
     })
 
 
@@ -173,6 +200,17 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
+    def client() -> RobinhoodClient:
+        # Same precedence as the CLI: an explicit token in the environment wins
+        # over the token file //examples:authenticate wrote.
+        token = os.environ.get("ROBINHOOD_MCP_TOKEN")
+        if token:
+            return RobinhoodClient(token, endpoint=args.endpoint,
+                                   verbose=args.verbose)
+        return RobinhoodClient.from_token_file(
+            token_file, endpoint=args.endpoint, verbose=args.verbose
+        )
+
     def build(demo: bool) -> Report:
         if demo:
             return demo_data.build_demo_report()
@@ -181,8 +219,22 @@ def main() -> int:
             endpoint=args.endpoint, verbose=args.verbose,
         )
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port),
-                                 make_handler(static_root, build))
+    def build_accounts(demo: bool) -> JsonValue:
+        if demo:
+            return demo_data.demo_accounts()
+        live = client()
+        live.connect()
+        return live.get_accounts()
+
+    def build_holdings(demo: bool) -> list[LabeledAccount]:
+        if demo:
+            return demo_data.demo_holdings()
+        return client().fetch_holdings()
+
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", args.port),
+        make_handler(static_root, build, build_accounts, build_holdings),
+    )
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"hood-normie serving {static_root}")
     print(f"open {url} — read-only, loopback only. Ctrl+C to stop.")

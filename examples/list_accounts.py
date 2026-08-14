@@ -6,7 +6,7 @@ import sys
 
 from examples.paths import workspace_path
 from hood_normie import RobinhoodClient
-from hood_normie.accounts import account_number, account_records, first
+from hood_normie.accounts import account_records, account_summary
 from hood_normie.oauth import DEFAULT_ENDPOINT, DEFAULT_TOKEN_FILE, OAuthError
 from hood_normie.types import JsonObject
 
@@ -39,15 +39,11 @@ def print_accounts(accounts: list[JsonObject]) -> None:
         return
 
     rows = [(
-        _display(first(
-            account, "tax_status", "taxStatus", "tax_type", "taxType",
-            "retirement_account_type", "retirementAccountType",
-            "brokerage_account_type", "brokerageAccountType",
-        )),
-        _display(first(account, "account_type", "accountType", "type")),
-        _display(account_number(account)),
-        _display(first(account, "nickname", "display_name", "displayName", "name")),
-    ) for account in accounts]
+        _display(summary["tax_status"]),
+        _display(summary["account_type"]),
+        _display(summary["account_number"]),
+        _display(summary["nickname"]),
+    ) for summary in map(account_summary, accounts)]
     headers = ("TAX STATUS", "CASH", "ACCOUNT NUMBER", "NICKNAME")
     widths = tuple(
         max(len(headers[index]), *(len(row[index]) for row in rows))
@@ -65,10 +61,8 @@ def print_accounts(accounts: list[JsonObject]) -> None:
         )
 
 
-def _display(value: object) -> str:
-    if value is None or isinstance(value, (dict, list, bool)):
-        return "(unavailable)"
-    return str(value)
+def _display(value: str | None) -> str:
+    return value if value is not None else "(unavailable)"
 
 
 if __name__ == "__main__":
