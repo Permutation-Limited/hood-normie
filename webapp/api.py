@@ -52,14 +52,19 @@ class PortfolioJson(TypedDict):
 
 class ReportJson(TypedDict):
     generated_at: str
+    demo: bool
     grand_total: str
     portfolios: list[PortfolioJson]
 
 
-def report_json(report: Report, *, generated_at: datetime | None = None) -> ReportJson:
+def report_json(report: Report, *, demo: bool = False,
+                generated_at: datetime | None = None) -> ReportJson:
     moment = generated_at or datetime.now(timezone.utc)
     return {
         "generated_at": moment.isoformat(),
+        # Travels with the data so a client cannot present invented numbers as
+        # real ones by losing track of which request it made.
+        "demo": demo,
         "grand_total": str(report.grand_total),
         "portfolios": [
             _portfolio_json(item, report.asset_classes) for item in report.portfolios

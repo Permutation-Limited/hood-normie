@@ -26,12 +26,39 @@ Authentication is shared with the CLI — the same token file, created by:
 bazel run //examples:authenticate
 ```
 
+## Demo mode
+
+The **Demo** switch in the header replaces your accounts with invented ones:
+
+```
+http://127.0.0.1:8765/rebalance?demo=1
+```
+
+The state lives in the URL, so a demo view is linkable, survives a reload, and
+follows you across navigation — a live URL can never be showing demo numbers or
+the reverse. Every demo response also carries `"demo": true`, and the page labels
+itself from that field rather than from the URL, so the banner reflects what the
+server actually computed.
+
+A demo request reads `webapp/demo_config.yaml` and the invented snapshot in
+`webapp/demo.py`. It contacts nothing, reads no token, and never opens your
+`config.yaml`, so demo mode works on a machine that has never authenticated. The
+computation is the real one — same report module as a live run — so the demo
+exercises margin cash targets, a fixed-dollar class, an ignored class, an
+undeclared class that therefore targets $0, an external account, and an unmapped
+holding.
+
+Edit those two files to change what the demo shows. `//webapp:server_test` checks
+that every demo holding has a quote, so an added symbol without a price fails the
+build rather than the page.
+
 ## Layout
 
 | Path | What it is |
 | --- | --- |
 | `server.py` | HTTP server: static assets, SPA fallback, `/api/rebalance` |
 | `api.py` | Report-to-JSON serialization |
+| `demo.py`, `demo_config.yaml` | Invented data behind the header's Demo switch |
 | `frontend/` | Vite + React + TypeScript sources |
 
 The numbers come from `//examples/rebalance:report`, the same module the terminal
@@ -40,11 +67,12 @@ rebalancer renders from, so the browser and the CLI cannot disagree.
 ## The API
 
 `GET /api/rebalance` runs a live fetch and returns one object per configured
-portfolio:
+portfolio. Add `?demo=1` for invented data:
 
 ```json
 {
   "generated_at": "2026-08-13T22:57:53.974583+00:00",
+  "demo": false,
   "grand_total": "3700",
   "portfolios": [
     {
@@ -78,8 +106,9 @@ Money is always a decimal string, never a JSON number, so exact cents survive th
 trip. Unlike the CLI's `--json`, `amount` keeps its sign; `action` carries the
 same direction either way.
 
-Errors return a JSON `error` field: `400` for a bad config, `401` when the OAuth
-token needs refreshing, `502` when Robinhood is unreachable.
+Errors return a JSON `error` field: `400` for a bad or missing config, `401` when
+the OAuth token needs refreshing, `502` when Robinhood is unreachable. Demo
+requests raise none of these, since they read neither config nor network.
 
 ## Why it binds to loopback
 

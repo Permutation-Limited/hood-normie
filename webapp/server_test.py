@@ -13,8 +13,14 @@ from examples.rebalance.report import (
     AccountHoldings, PortfolioReport, Report,
 )
 from hood_normie.oauth import OAuthError
+from webapp import demo
 from webapp.api import report_json
 from webapp.server import INDEX, make_handler
+
+
+def _ignore_demo(build):
+    """Adapt a zero-argument fake builder to the handler's build(demo) contract."""
+    return lambda demo: build()
 
 
 def sample_report():
@@ -64,8 +70,39 @@ class ApiJsonTest(unittest.TestCase):
         self.assertEqual(report_json(sample_report())["grand_total"], "2050")
 
 
+class DemoTest(unittest.TestCase):
+    def test_builds_a_report_without_network_or_token(self):
+        report = demo.build_demo_report()
+        self.assertEqual([item.portfolio.name for item in report.portfolios],
+                         ["Demo Taxable", "Demo Retirement"])
+        self.assertGreater(report.grand_total, Decimal(0))
+
+    def test_every_demo_holding_is_quoted(self):
+        held = {symbol for holdings in demo.HOLDINGS.values()
+                for symbol, _ in holdings}
+        self.assertEqual(held - set(demo.PRICES), set())
+
+    def test_demo_shows_an_unclassified_holding(self):
+        report = demo.build_demo_report()
+        taxable = report.portfolios[0]
+        self.assertEqual([item.symbol for item in taxable.unclassified(
+            report.asset_classes)], ["MEME"])
+
+    def test_undeclared_class_is_sold_off_in_the_ira(self):
+        report = demo.build_demo_report()
+        plan = {item.asset_class: item for item in report.portfolios[1].recommendations}
+        self.assertEqual(plan["alternatives"].target_value, Decimal("0.00"))
+        self.assertEqual(plan["alternatives"].action, "SELL")
+
+    def test_demo_report_is_flagged_in_the_payload(self):
+        payload = report_json(demo.build_demo_report(), demo=True)
+        self.assertTrue(payload["demo"])
+        self.assertFalse(report_json(sample_report())["demo"])
+
+
 class ServerTest(unittest.TestCase):
     def serve(self, build):
+        build = _ignore_demo(build)
         root = tempfile.mkdtemp()
         with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
             stream.write("<!doctype html><div id=root></div>")
@@ -103,6 +140,18 @@ class ServerTest(unittest.TestCase):
             self.get(f"{base}/api/rebalance")
         self.assertEqual(caught.exception.code, 400)
         self.assertIn("must be unique", json.loads(caught.exception.read())["error"])
+
+    def test_missing_config_points_at_the_example_and_demo_mode(self):
+        def build():
+            raise FileNotFoundError(2, "No such file", "/repo/config.yaml")
+
+        base = self.serve(build)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.get(f"{base}/api/rebalance")
+        self.assertEqual(caught.exception.code, 400)
+        message = json.loads(caught.exception.read())["error"]
+        self.assertIn("/repo/config.yaml", message)
+        self.assertIn("Demo", message)
 
     def test_expired_token_asks_for_reauthentication(self):
         def build():
@@ -143,6 +192,30 @@ class ServerTest(unittest.TestCase):
                     self.assertEqual(error.code, 404)
                 else:
                     self.assertNotIn("secret", body)
+
+    def test_demo_param_selects_the_demo_builder(self):
+        seen: list[bool] = []
+
+        def build(demo):
+            seen.append(demo)
+            return sample_report()
+
+        root = tempfile.mkdtemp()
+        with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
+            stream.write("<!doctype html><div id=root></div>")
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(root, build))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+
+        for query, expected in (("", False), ("?demo=1", True), ("?demo=true", True),
+                                ("?demo=0", False), ("?demo=maybe", False)):
+            with self.subTest(query=query):
+                _, body, _ = self.get(f"{base}/api/rebalance{query}")
+                self.assertEqual(seen[-1], expected)
+                self.assertEqual(json.loads(body)["demo"], expected)
 
     def test_unknown_api_endpoint_is_json_not_the_shell(self):
         base = self.serve(sample_report)

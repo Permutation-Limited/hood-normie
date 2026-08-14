@@ -45,14 +45,21 @@ export interface Portfolio {
 
 export interface RebalanceReport {
   generated_at: string;
+  /** True when the server answered with invented data instead of live accounts. */
+  demo: boolean;
   grand_total: string;
   portfolios: Portfolio[];
 }
 
 export class ApiError extends Error {}
 
-export async function fetchRebalance(signal?: AbortSignal): Promise<RebalanceReport> {
-  const response = await fetch("/api/rebalance", { signal: signal ?? null });
+export async function fetchRebalance(
+  options: { demo?: boolean; signal?: AbortSignal } = {},
+): Promise<RebalanceReport> {
+  const query = options.demo ? "?demo=1" : "";
+  const response = await fetch(`/api/rebalance${query}`, {
+    signal: options.signal ?? null,
+  });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const detail =

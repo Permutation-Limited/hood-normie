@@ -18,11 +18,12 @@ import posixpath
 import sys
 import threading
 from typing import Callable
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from examples.paths import workspace_path
 from examples.rebalance.report import DEFAULT_ENDPOINT, Report, build_report
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
+from webapp import demo as demo_data
 from webapp.api import report_json
 
 
@@ -30,7 +31,14 @@ DEFAULT_PORT = 8765
 DEFAULT_CONFIG = "config.yaml"
 INDEX = "index.html"
 
-ReportBuilder = Callable[[], Report]
+ReportBuilder = Callable[[bool], Report]
+DEMO_VALUES = frozenset({"1", "true", "yes"})
+
+
+def _is_demo(query: str) -> bool:
+    """Demo mode is opt-in per request; anything unrecognized means live data."""
+    values = parse_qs(query).get("demo", [])
+    return bool(values) and values[-1].lower() in DEMO_VALUES
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -46,18 +54,27 @@ class Handler(BaseHTTPRequestHandler):
     lock = threading.Lock()
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
-        if path == "/api/rebalance":
-            self.serve_report()
-        elif path.startswith("/api/"):
-            self.send_json({"error": f"unknown endpoint {path}"}, status=404)
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/rebalance":
+            self.serve_report(demo=_is_demo(parsed.query))
+        elif parsed.path.startswith("/api/"):
+            self.send_json({"error": f"unknown endpoint {parsed.path}"}, status=404)
         else:
-            self.serve_static(path)
+            self.serve_static(parsed.path)
 
-    def serve_report(self) -> None:
+    def serve_report(self, demo: bool) -> None:
         try:
             with self.lock:
-                payload = report_json(self.build())
+                payload = report_json(self.build(demo), demo=demo)
+        except FileNotFoundError as error:
+            # Demo mode needs no config, so reaching live data without one is an
+            # ordinary first-run state rather than a server fault.
+            self.send_json(
+                {"error": f"no config file at {error.filename}. Copy "
+                          "examples/rebalance/config.example.yaml to config.yaml, "
+                          "or switch on Demo to browse invented data."},
+                status=400,
+            )
         except (ValueError, KeyError) as error:
             self.send_json({"error": str(error)}, status=400)
         except OAuthError as error:
@@ -156,7 +173,9 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    def build() -> Report:
+    def build(demo: bool) -> Report:
+        if demo:
+            return demo_data.build_demo_report()
         return build_report(
             config_path=config_path, token_file=token_file,
             endpoint=args.endpoint, verbose=args.verbose,

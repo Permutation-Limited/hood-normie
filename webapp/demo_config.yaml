@@ -1,0 +1,54 @@
+# Allocation config for demo mode. Not your config: the web app loads this file
+# instead of config.yaml when a request asks for demo data, and pairs it with the
+# invented portfolio snapshot in demo.py.
+#
+# It is deliberately busy, so the demo shows every feature of the report: a
+# margin cash target, a fixed-dollar class, an ignored class, an undeclared class
+# that therefore targets $0, an external account, and an unmapped holding.
+assets:
+  - symbol: VTI
+    class: stocks
+  - symbol: VXUS
+    class: stocks
+  - symbol: BND
+    class: bonds
+  - symbol: BNDX
+    class: bonds
+  - symbol: GLD
+    class: alternatives
+  - symbol: OLDCO
+    class: legacy
+portfolios:
+  - name: Demo Taxable
+    robinhood_account_numbers: [DEMO-TAXABLE]
+    target_cash: -2000
+    minimum_trade: 25
+    classes:
+      - name: stocks
+        weight: 0.70
+      - name: bonds
+        weight: 0.20
+      - name: alternatives
+        weight: 0.10
+      - name: legacy
+        ignore: true
+    external_accounts:
+      - name: Demo 401(k)
+        cash: 1500
+        assets:
+          - symbol: VTI
+            quantity: 120
+          - symbol: BNDX
+            quantity: 300
+  - name: Demo Retirement
+    robinhood_account_numbers: [DEMO-IRA]
+    minimum_trade: 25
+    classes:
+      - name: stocks
+        weight: 1.0
+      - name: bonds
+        target_amount: 25000
+      - name: legacy
+        ignore: true
+      # alternatives is left undeclared, so it targets $0 here and the plan sells
+      # the GLD this account holds.

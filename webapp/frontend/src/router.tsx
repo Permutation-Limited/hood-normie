@@ -7,7 +7,19 @@ import Layout from "./components/Layout";
 import Home from "./routes/Home";
 import Rebalance from "./routes/Rebalance";
 
-const rootRoute = createRootRoute({ component: Layout });
+/** Demo mode lives in the URL so a demo view is linkable and survives reload. */
+export interface AppSearch {
+  demo?: boolean;
+}
+
+function validateSearch(search: Record<string, unknown>): AppSearch {
+  const value = search["demo"];
+  const demo = value === true || value === "1" || value === "true";
+  // Omitted rather than false, to keep a live URL free of query noise.
+  return demo ? { demo: true } : {};
+}
+
+const rootRoute = createRootRoute({ component: Layout, validateSearch });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,

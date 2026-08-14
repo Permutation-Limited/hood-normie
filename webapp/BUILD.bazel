@@ -13,6 +13,17 @@ py_library(
     deps = ["//examples/rebalance:report"],
 )
 
+py_library(
+    name = "demo",
+    srcs = ["demo.py"],
+    data = ["demo_config.yaml"],
+    deps = [
+        ":api",
+        "//examples/rebalance:report",
+        "//hood_normie",
+    ],
+)
+
 py_binary(
     name = "server",
     srcs = ["server.py"],
@@ -20,6 +31,7 @@ py_binary(
     main = "server.py",
     deps = [
         ":api",
+        ":demo",
         "//examples:paths",
         "//examples/rebalance:report",
         "//hood_normie",
@@ -41,6 +53,7 @@ py_library(
     srcs = ["server.py"],
     deps = [
         ":api",
+        ":demo",
         "//examples:paths",
         "//examples/rebalance:report",
         "//hood_normie",

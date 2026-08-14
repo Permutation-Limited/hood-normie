@@ -13,7 +13,9 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ScienceIcon from "@mui/icons-material/Science";
 import { useQuery } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import type { Portfolio } from "../api";
 import { fetchRebalance } from "../api";
 import { money } from "../format";
@@ -77,9 +79,12 @@ function PortfolioSection({ portfolio }: { portfolio: Portfolio }): ReactElement
 }
 
 export default function Rebalance(): ReactElement {
+  const { demo } = useSearch({ strict: false });
+  const isDemo = Boolean(demo);
   const { data, error, isFetching, refetch } = useQuery({
-    queryKey: ["rebalance"],
-    queryFn: ({ signal }) => fetchRebalance(signal),
+    // Demo is part of the key: switching modes must refetch, never reuse.
+    queryKey: ["rebalance", isDemo],
+    queryFn: ({ signal }) => fetchRebalance({ demo: isDemo, signal }),
     // Quotes are live: every view is a fresh snapshot, never a cached one.
     staleTime: 0,
     gcTime: 0,
@@ -100,7 +105,9 @@ export default function Rebalance(): ReactElement {
           <Typography variant="body2" color="text.secondary">
             {data
               ? `Snapshot taken ${new Date(data.generated_at).toLocaleString()}`
-              : "Live Robinhood quotes and positions"}
+              : isDemo
+                ? "Invented portfolios, no account contacted"
+                : "Live Robinhood quotes and positions"}
           </Typography>
         </Box>
         <Button
@@ -113,10 +120,21 @@ export default function Rebalance(): ReactElement {
         </Button>
       </Stack>
 
-      <Alert severity="info" sx={{ mb: 3 }}>
-        Read-only. These are class-level dollar amounts, not orders — the tool does
-        not choose a security and never places a trade.
-      </Alert>
+      {/* Driven by the response, not the URL: whatever the server actually
+          computed is what gets labelled. */}
+      {data?.demo ? (
+        <Alert severity="warning" icon={<ScienceIcon />} sx={{ mb: 3 }}>
+          <AlertTitle>Demo data</AlertTitle>
+          Invented portfolios and quotes. No Robinhood account was contacted and
+          none of these figures are yours. Turn off Demo in the header for live
+          accounts.
+        </Alert>
+      ) : (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Read-only. These are class-level dollar amounts, not orders — the tool
+          does not choose a security and never places a trade.
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
@@ -129,7 +147,9 @@ export default function Rebalance(): ReactElement {
         <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 6 }}>
           <CircularProgress size={24} />
           <Typography color="text.secondary">
-            Fetching live positions and quotes from Robinhood…
+            {isDemo
+              ? "Building the demo report…"
+              : "Fetching live positions and quotes from Robinhood…"}
           </Typography>
         </Stack>
       )}

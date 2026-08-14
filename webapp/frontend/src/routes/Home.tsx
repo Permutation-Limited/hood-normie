@@ -26,7 +26,12 @@ export default function Home(): ReactElement {
             accounts, showing the dollar adjustment per asset class each configured
             portfolio needs to reach its target allocation.
           </Typography>
-          <Button component={Link} to="/rebalance" variant="contained">
+          <Button
+            component={Link}
+            to="/rebalance"
+            search={true}
+            variant="contained"
+          >
             Open rebalance
           </Button>
         </CardContent>
