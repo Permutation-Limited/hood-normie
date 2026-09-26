@@ -117,6 +117,58 @@ export interface TaxPeriod {
   cumulative: IncomeTotals;
 }
 
+/** Income by tax rate, after netting capital gains and losses (Schedule D). */
+export interface Treatment {
+  /** Short-term gains and non-qualified dividends, less `deductible_loss`. */
+  ordinary: string;
+  /** Long-term gains and qualified dividends. */
+  preferential: string;
+  /** Net capital loss applied against ordinary income, up to $3,000. */
+  deductible_loss: string;
+  /** Net capital loss beyond the limit, carried into next year. */
+  carryforward: string;
+}
+
+/**
+ * What is known, and the two extremes for unresolved amounts: unknown-term
+ * gains and unclassified dividends all at ordinary rates, or all preferential.
+ */
+export interface TreatmentRange {
+  known: Treatment;
+  all_ordinary: Treatment;
+  all_preferential: Treatment;
+  unresolved_gains: string;
+  unresolved_dividends: string;
+}
+
+export interface TaxablePeriod extends TaxPeriod {
+  /** This period's share: the change in the year-to-date treatment. */
+  treatment: TreatmentRange;
+  cumulative_treatment: TreatmentRange;
+}
+
+export interface Replacement {
+  date: string;
+  account_label: string;
+  tax_advantaged: boolean;
+  quantity: string;
+}
+
+/** A loss sale with purchases of the same symbol within 30 days. */
+export interface WashSale {
+  account_label: string;
+  date: string;
+  symbol: string;
+  quantity: string;
+  loss: string;
+  replaced: string;
+  /** The loss share the replacements cover, as a positive amount. */
+  disallowed: string;
+  /** The part replaced in a tax-advantaged account: lost for good. */
+  permanent: string;
+  replacements: Replacement[];
+}
+
 export type Term = "short" | "long" | "unknown";
 
 /** One closing trade from Robinhood's realized P&L history. */
@@ -160,7 +212,12 @@ export interface IncomeReport {
   demo: boolean;
   year: number;
   taxable_totals: IncomeTotals;
-  taxable_periods: TaxPeriod[];
+  taxable_treatment: TreatmentRange;
+  taxable_periods: TaxablePeriod[];
+  carryover_short: string;
+  carryover_long: string;
+  wash_sales: WashSale[];
+  possibly_disallowed: string;
   accounts: IncomeAccount[];
 }
 

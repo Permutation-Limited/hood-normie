@@ -139,6 +139,8 @@ SALES: list[tuple[str, int, int, str, str, str, str, bool]] = [
     ("DEMO-TAXABLE", 3, 18, "EXITED", "50", "41.25", "905.10", True),
     # Bought and sold in the account: replaying the orders settles it.
     ("DEMO-TAXABLE", 4, 15, "TRADE", "30", "25.00", "150.00", True),
+    # A loss that the June DRIP purchase lands inside the wash-sale window of.
+    ("DEMO-TAXABLE", 6, 1, "VXUS", "40", "66.00", "-230.00", True),
     # The oldest open lot is too young to prove anything.
     ("DEMO-TAXABLE", 5, 20, "MEME", "100", "3.40", "118.00", True),
     # A coin: the trade history lists it alongside equities.
@@ -234,15 +236,20 @@ class DemoIncomeSource:
             if per_share is None or (account_number, symbol) in CASH_DIVIDENDS:
                 continue
             for month, day in EX_DATES:
-                # Reinvested a few days after the ex-date, as Robinhood does.
+                # Reinvested a few days after the ex-date, as Robinhood does,
+                # at the demo's flat $100.
+                amount = Decimal(per_share) * Decimal(quantity)
+                stamp = _stamp(self.year, month, day + 4, hour=2)
                 orders.append({
+                    "id": f"demo-drip-{symbol}-{stamp}",
                     "symbol": symbol, "side": "buy", "state": "filled",
-                    "placed_agent": "drip",
-                    "created_at": _stamp(self.year, month, day + 4, hour=2),
+                    "placed_agent": "drip", "created_at": stamp,
+                    "cumulative_quantity": str(amount / 100),
                     "dollar_based_amount": {
-                        "amount": str(Decimal(per_share) * Decimal(quantity)),
-                        "currency_code": "USD",
+                        "amount": str(amount), "currency_code": "USD",
                     },
+                    "executions": [{"timestamp": stamp, "quantity": str(amount / 100),
+                                    "price": "100"}],
                 })
         return orders
 

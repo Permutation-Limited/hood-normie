@@ -16,3 +16,11 @@ qualified_dividends:
 # inferred term is never overridden. Values are short or long.
 holding_periods:
   OLDCO: long
+
+# Capital losses carried over from last year (Schedule D's carryover
+# worksheet), by term. They offset this year's gains first, and what is left
+# counts toward the $3,000 limit against ordinary income. The report prints
+# the carryforward its own year leaves over.
+capital_loss_carryover:
+  short_term: 0
+  long_term: 1500

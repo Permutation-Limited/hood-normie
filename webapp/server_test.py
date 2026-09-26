@@ -199,7 +199,29 @@ class IncomeJsonTest(unittest.TestCase):
         self.assertEqual(realized, Decimal(payload["taxable_totals"]["realized"]))
         self.assertEqual(periods[-1]["cumulative"], payload["taxable_totals"])
         self.assertEqual(periods[0]["cumulative"], periods[0]["totals"])
-        self.assertEqual(payload["accounts"][0]["periods"], periods)
+        shared = [{key: value for key, value in period.items()
+                   if key not in ("treatment", "cumulative_treatment")}
+                  for period in periods]
+        self.assertEqual(payload["accounts"][0]["periods"], shared)
+
+    def test_taxable_income_is_grouped_by_tax_rate(self):
+        payload = income_json(demo.build_demo_income(2026))
+        treatment = payload["taxable_treatment"]
+        # Unknown-term gains and OLDCO's unclassified dividends leave a range.
+        self.assertNotEqual(treatment["all_ordinary"], treatment["all_preferential"])
+        self.assertEqual(Decimal(treatment["unresolved_dividends"]), Decimal("90.00"))
+        ordinary = sum(Decimal(p["treatment"]["known"]["ordinary"])
+                       for p in payload["taxable_periods"])
+        self.assertEqual(ordinary, Decimal(treatment["known"]["ordinary"]))
+        self.assertEqual(payload["taxable_periods"][-1]["cumulative_treatment"],
+                         treatment)
+
+    def test_demo_flags_a_wash_sale(self):
+        payload = income_json(demo.build_demo_income(2026))
+        [wash] = payload["wash_sales"]
+        self.assertEqual((wash["symbol"], wash["date"]), ("VXUS", "2026-06-01"))
+        self.assertEqual(wash["replacements"][0]["date"], "2026-06-18")
+        self.assertEqual(payload["possibly_disallowed"], wash["disallowed"])
 
     def test_quantities_have_no_exponent(self):
         payload = income_json(demo.build_demo_income(2026))

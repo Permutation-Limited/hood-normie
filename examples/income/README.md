@@ -131,6 +131,55 @@ estimated.
 
 **Qualified status is never reported**, so it comes from configuration.
 
+## Tax treatment
+
+Federal tax cares about two groups, not six buckets. Short-term gains and
+non-qualified dividends are taxed at ordinary income rates; long-term gains and
+qualified dividends at the preferential 0/15/20% rates. The closing
+**TAXABLE ACCOUNTS** section groups them that way, after the Schedule D
+netting that makes simple addition wrong:
+
+- gains and losses net within each term, then across terms, and whatever is
+  left keeps the character of the larger side;
+- a net capital loss offsets at most $3,000 of ordinary income ($1,500
+  married filing separately), and the rest carries into next year;
+- dividends never absorb capital losses.
+
+Because losses and the limit apply per return, the grouping is shown only for
+the taxable accounts together, never per account.
+
+While anything is unresolved, each group is a range: from every unknown-term
+gain and unclassified dividend at ordinary rates to every one at preferential
+rates. Simply leaving them out is not a possible outcome — netting lets an
+unknown gain absorb a loss on the other line — so the range is the headline.
+The by-period table does leave them out, in a column of their own; each
+period's figure there is the change in the year-to-date one, so the four add
+up to the year.
+
+Last year's unused losses go in `capital_loss_carryover` (below); the report
+prints the carryforward its own year leaves over, to copy into next year's.
+
+Not covered: 28% collectibles (gold and silver ETFs), the 199A deduction on
+REIT dividends, the 3.8% net investment income tax, and state tax, which
+mostly ignores the distinction.
+
+## Wash sales
+
+A loss is disallowed to the extent shares of the same symbol were bought within
+30 days before or after the sale, in any account, reinvested dividends
+included. The report checks every taxable loss against purchases in all the
+accounts it reads and lists the matches under **POSSIBLE WASH SALES**, with the
+share of each loss the replacements cover. A replacement in an IRA makes that
+share permanent; otherwise it moves into the new shares' basis.
+
+These are flags, not adjustments: Robinhood's realized gain may already
+account for a wash sale, and the MCP server does not say. Only identical
+tickers are checked, not "substantially identical" funds, and crypto is
+skipped because the rule does not currently reach it. A purchase in the
+selling account shortly before the sale may be the very shares sold, so those
+count only up to what the account still held afterwards. Restricting the run
+with `--account` also restricts the purchases checked.
+
 ## Configuration
 
 Optional. Copy the example to the repository root:
@@ -145,6 +194,9 @@ qualified_dividends:
   BND: nonqualified  # or: qualified
 holding_periods:
   OLDCO: long        # settles sales whose term is otherwise unknown
+capital_loss_carryover:
+  short_term: 0      # last year's unused losses, from Schedule D
+  long_term: 1500
 ```
 
 A symbol missing from `qualified_dividends` is reported as unclassified rather
@@ -162,4 +214,8 @@ server takes `--income-config PATH`.
 | --- | --- |
 | `core.py` | Classification, config parsing, totals; pure, no network |
 | `report.py` | Fetches the records per account and builds the report |
+| `lots.py` | Replays order history to recover closed lots |
+| `dividends.py` | Estimates cash dividends from price history |
+| `treatment.py` | Groups income by tax rate after netting |
+| `wash.py` | Flags possible wash sales |
 | `main.py` | The command-line tables |

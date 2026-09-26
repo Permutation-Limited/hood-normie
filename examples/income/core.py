@@ -64,6 +64,7 @@ class IncomeConfigFile(TypedDict, total=False):
 
     qualified_dividends: dict[str, object]
     holding_periods: dict[str, object]
+    capital_loss_carryover: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,9 @@ class IncomeConfig:
 
     qualified_fractions: Mapping[str, Decimal] = field(default_factory=dict)
     holding_periods: Mapping[str, Term] = field(default_factory=dict)
+    # Last year's unused capital losses, as positive amounts by character.
+    carryover_short: Decimal = Decimal(0)
+    carryover_long: Decimal = Decimal(0)
 
 
 @dataclass(frozen=True)
@@ -181,9 +185,43 @@ class AccountIncome:
 
 
 @dataclass(frozen=True)
+class Replacement:
+    """Shares bought within 30 days of a loss sale, and how many of them count."""
+
+    when: date
+    account_label: str
+    tax_advantaged: bool
+    quantity: Decimal
+
+
+@dataclass(frozen=True)
+class WashSale:
+    """A loss sale with replacement purchases inside the wash-sale window.
+
+    `disallowed` is the loss share the replacements cover, as a positive
+    amount; `permanent` is the part bought in a tax-advantaged account, where
+    the disallowed loss never comes back as basis.
+    """
+
+    account_label: str
+    sale: Sale
+    replacements: tuple[Replacement, ...]
+    replaced: Decimal
+    disallowed: Decimal
+    permanent: Decimal
+
+
+@dataclass(frozen=True)
 class IncomeReport:
     year: int
     accounts: tuple[AccountIncome, ...]
+    wash_sales: tuple[WashSale, ...] = ()
+    carryover_short: Decimal = Decimal(0)
+    carryover_long: Decimal = Decimal(0)
+
+    @property
+    def possibly_disallowed(self) -> Decimal:
+        return sum((item.disallowed for item in self.wash_sales), Decimal(0))
 
     @property
     def taxable(self) -> tuple[AccountIncome, ...]:
@@ -545,7 +583,9 @@ def load_income_config(path: str) -> IncomeConfig:
 
 
 def parse_income_config(raw: IncomeConfigFile) -> IncomeConfig:
-    unknown = set(raw) - {"qualified_dividends", "holding_periods"}
+    unknown = set(raw) - {
+        "qualified_dividends", "holding_periods", "capital_loss_carryover",
+    }
     if unknown:
         raise ValueError(f"unknown income config fields: {', '.join(sorted(unknown))}")
     fractions = {
@@ -556,7 +596,27 @@ def parse_income_config(raw: IncomeConfigFile) -> IncomeConfig:
         str(symbol).upper(): holding_period(symbol, value)
         for symbol, value in _mapping(raw, "holding_periods").items()
     }
-    return IncomeConfig(qualified_fractions=fractions, holding_periods=periods)
+    carryover = raw.get("capital_loss_carryover") or {}
+    if not isinstance(carryover, dict) or set(carryover) - {"short_term", "long_term"}:
+        raise ValueError(
+            "capital_loss_carryover takes short_term and long_term amounts"
+        )
+    return IncomeConfig(
+        qualified_fractions=fractions, holding_periods=periods,
+        carryover_short=loss_amount("short_term", carryover.get("short_term", 0)),
+        carryover_long=loss_amount("long_term", carryover.get("long_term", 0)),
+    )
+
+
+def loss_amount(name: str, value: object) -> Decimal:
+    """A carried-over loss, written as a positive amount."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError(f"capital_loss_carryover.{name} must be an amount")
+    try:
+        amount = abs(decimal(value))
+    except ArithmeticError:
+        raise ValueError(f"capital_loss_carryover.{name} must be an amount") from None
+    return amount
 
 
 def _mapping(raw: IncomeConfigFile, name: Literal[

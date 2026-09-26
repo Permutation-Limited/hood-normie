@@ -11,13 +11,15 @@ from typing import Iterable, Protocol
 
 from examples.income.core import (
     EASTERN, AccountIncome, ClosedPortion, Dividend, IncomeConfig, IncomeReport,
+    WashSale,
     classify_sales, decimal, eastern_date, equity_sell_times, is_equity_sale,
     lot_dates, lot_quantities, reinvested_dividends,
 )
 from examples.income.dividends import (
     DividendEvent, dividend_events, estimated_cash_dividends, unreinvested_events,
 )
-from examples.income.lots import closed_portions, sell_fills
+from examples.income.lots import closed_portions, fills, sell_fills
+from examples.income.wash import LossSale, Purchase, find_wash_sales
 from hood_normie.accounts import (
     account_label, account_number, account_records, is_tax_advantaged,
 )
@@ -93,9 +95,50 @@ def build_income_report(
     fetched = [_fetch(source, number, by_number.get(number), span, year)
                for number in selected]
     events = _dividend_events(source, fetched, year)
-    return IncomeReport(year=year, accounts=tuple(
+    accounts = tuple(
         _account_income(source, records, year, config, events) for records in fetched
-    ))
+    )
+    return IncomeReport(
+        year=year, accounts=accounts,
+        wash_sales=tuple(_wash_sales(fetched, accounts)),
+        carryover_short=config.carryover_short,
+        carryover_long=config.carryover_long,
+    )
+
+
+def _wash_sales(fetched: list[AccountRecords],
+                accounts: tuple[AccountIncome, ...]) -> list[WashSale]:
+    """Loss sales in taxable accounts against purchases in every account."""
+    purchases: list[Purchase] = []
+    for records, account in zip(fetched, accounts):
+        symbols = {str(order.get("symbol")).upper() for order in records.orders
+                   if order.get("side") == "buy" and order.get("symbol")}
+        for symbol in symbols:
+            for moment, _, side, quantity, _ in fills(records.orders, symbol):
+                if side == "buy":
+                    purchases.append(Purchase(
+                        symbol=symbol, when=eastern_date(moment.isoformat()),
+                        account_number=records.number, account_label=account.label,
+                        tax_advantaged=records.tax_advantaged, quantity=quantity,
+                    ))
+    by_number = {records.number: records for records in fetched}
+
+    def held_after(number: str, symbol: str, day: date) -> Decimal:
+        # Walk back from today's position through every fill after the day.
+        # Transfers are invisible here, so this is an estimate.
+        records = by_number[number]
+        held = records.positions.get(symbol, Decimal(0))
+        for moment, _, side, quantity, _ in fills(records.orders, symbol):
+            if eastern_date(moment.isoformat()) > day:
+                held += -quantity if side == "buy" else quantity
+        return max(held, Decimal(0))
+
+    losses = [
+        LossSale(records.number, account.label, sale)
+        for records, account in zip(fetched, accounts) if not account.tax_advantaged
+        for sale in account.sales
+    ]
+    return find_wash_sales(losses, purchases, held_after)
 
 
 def _fetch(source: IncomeSource, number: str, record: JsonObject | None,

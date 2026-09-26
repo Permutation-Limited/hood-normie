@@ -14,6 +14,8 @@ import IncomeSummary from "../components/IncomeSummary";
 import PeriodsTable from "../components/PeriodsTable";
 import ReportPage from "../components/ReportPage";
 import SalesTable from "../components/SalesTable";
+import TreatmentSummary from "../components/TreatmentSummary";
+import WashSales from "../components/WashSales";
 import { useLiveQuery } from "../useLiveQuery";
 import type { ReactElement } from "react";
 
@@ -141,6 +143,12 @@ export default function Income(): ReactElement {
               <Typography variant="h6" gutterBottom>
                 Taxable accounts
               </Typography>
+              <TreatmentSummary
+                treatment={current.taxable_treatment}
+                carryoverShort={current.carryover_short}
+                carryoverLong={current.carryover_long}
+              />
+              <Divider sx={{ my: 2 }} />
               <IncomeSummary totals={current.taxable_totals} />
               <PeriodsTable
                 periods={current.taxable_periods}
@@ -149,6 +157,11 @@ export default function Income(): ReactElement {
               />
             </CardContent>
           </Card>
+          <WashSales
+            washSales={current.wash_sales}
+            total={current.possibly_disallowed}
+            demo={current.demo}
+          />
           {current.accounts.map((account) => (
             <AccountSection
               key={account.account_number}

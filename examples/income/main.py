@@ -8,12 +8,17 @@ import argparse
 from decimal import Decimal
 import os
 import sys
+from typing import Callable
 
 from examples.income.core import (
-    DEFAULT_CONFIG, AccountIncome, IncomeReport, IncomeTotals, cumulative,
+    DEFAULT_CONFIG, AccountIncome, IncomeReport, IncomeTotals,
+    cumulative as cumulative_totals,
     dividends_by_symbol, estimated_tax_periods, load_optional_config,
 )
 from examples.income.report import build_income_report, today_eastern
+from examples.income.treatment import (
+    LOSS_LIMIT, Treatment, TreatmentRange, period_treatments, treatment_range,
+)
 from examples.paths import workspace_path
 from examples.terminal import Style, color_enabled
 from hood_normie import RobinhoodClient
@@ -154,7 +159,7 @@ def print_summary(totals: IncomeTotals, style: Style) -> None:
 def print_periods(periods: list[IncomeTotals], year: int, style: Style,
                   cumulative_view: bool = False) -> None:
     """One row per IRS estimated-tax period: Jan–Mar, Apr–May, Jun–Aug, Sep–Dec."""
-    rows = cumulative(periods) if cumulative_view else periods
+    rows = cumulative_totals(periods) if cumulative_view else periods
     title = ("BY ESTIMATED-TAX PERIOD (year to date through each period's end)"
              if cumulative_view else "BY ESTIMATED-TAX PERIOD")
     print(style.apply(title, style.BOLD))
@@ -178,16 +183,125 @@ def print_periods(periods: list[IncomeTotals], year: int, style: Style,
 
 def print_taxable_totals(report: IncomeReport, style: Style,
                          *, cumulative: bool = False) -> None:
+    """The taxable accounts together: where the tax treatment is decided.
+
+    Losses net across accounts and the $3,000 limit is per return, so the
+    grouping by tax rate only means something here, not per account.
+    """
     totals = report.taxable_totals
     print(style.apply(f"◆ TAXABLE ACCOUNTS {report.year}", style.BOLD, style.CYAN))
     print_summary(totals, style)
-    print_periods(report.taxable_period_totals, report.year, style, cumulative)
+    treatment = treatment_range(totals, report.carryover_short, report.carryover_long)
+    print_treatment(treatment, report, style)
+    running, own = period_treatments(
+        cumulative_totals(report.taxable_period_totals),
+        report.carryover_short, report.carryover_long,
+    )
+    print_treatment_periods(running if cumulative else own, report.year, style,
+                            cumulative)
+    print_wash_sales(report, style)
     if totals.unknown_term or totals.unclassified:
         print(style.apply(
             "Unknown and unclassified amounts need a holding period or qualified "
             f"share in {DEFAULT_CONFIG}; see examples/income/README.md.",
             style.YELLOW,
         ))
+    if treatment.all_ordinary.carryforward or treatment.all_preferential.carryforward:
+        print(style.apply(
+            f"Net capital loss beyond ${LOSS_LIMIT:,} carries into {report.year + 1}: "
+            f"set capital_loss_carryover in next year's {DEFAULT_CONFIG}.",
+            style.DIM,
+        ))
+
+
+def print_treatment(treatment: TreatmentRange, report: IncomeReport,
+                    style: Style) -> None:
+    """Income by tax rate after netting, with a range for what is unresolved."""
+    title = "BY TAX RATE (after netting gains and losses)"
+    if report.carryover_short or report.carryover_long:
+        title += " — includes last year's loss carryover"
+    print(style.apply(title, style.BOLD))
+    columns = [("", treatment.all_ordinary)]
+    if not treatment.resolved:
+        # Leaving unresolved amounts out is not itself an outcome, since netting
+        # lets an unknown gain move both lines; the two extremes bound it.
+        columns = [("UNRESOLVED AS ORD.", treatment.all_ordinary),
+                   ("UNRESOLVED AS PREF.", treatment.all_preferential)]
+        print(style.apply(
+            f"{'':<26}" + "".join(f"{name:>21}" for name, _ in columns), style.DIM
+        ))
+    rows: tuple[tuple[str, Callable[[Treatment], Decimal]], ...] = (
+        ("Ordinary-rate income", lambda t: t.ordinary),
+        ("Preferential-rate income", lambda t: t.preferential),
+        ("Capital loss deducted", lambda t: t.deductible_loss),
+        ("Loss carried forward", lambda t: t.carryforward),
+    )
+    for label, pick in rows:
+        values = [pick(item) for _, item in columns]
+        if label.startswith(("Capital", "Loss")) and not any(values):
+            continue
+        print(f"{label:<26}" + "".join(f"{_money(value):>21}" for value in values))
+    if not treatment.resolved:
+        print(style.apply(
+            f"Unresolved: {_money(treatment.unresolved_gains)} of unknown-term gains, "
+            f"{_money(treatment.unresolved_dividends)} of unclassified dividends.",
+            style.YELLOW,
+        ))
+    print(style.apply(
+        "Ordinary: short-term gains and non-qualified dividends, at income-tax "
+        "rates. Preferential: long-term gains and qualified dividends, at 0/15/20%.",
+        style.DIM,
+    ))
+
+
+def print_treatment_periods(periods: list[TreatmentRange], year: int, style: Style,
+                            cumulative_view: bool) -> None:
+    title = ("BY TAX RATE AND PERIOD (year to date through each period's end)"
+             if cumulative_view else "BY TAX RATE AND PERIOD")
+    print(style.apply(title, style.BOLD))
+    print(style.apply(
+        f"{'PERIOD':<13} {'DUE':<10} {'ORDINARY':>12} {'PREFERENTIAL':>13} "
+        f"{'UNRESOLVED':>12}", style.DIM,
+    ))
+    for period, treatment in zip(estimated_tax_periods(year), periods):
+        unresolved = treatment.unresolved_gains + treatment.unresolved_dividends
+        print(
+            f"{period.label:<13} {period.due.isoformat():<10} "
+            f"{_money(treatment.known.ordinary):>12} "
+            f"{_money(treatment.known.preferential):>13} "
+            + style.apply(f"{_money(unresolved):>12}", style.YELLOW if unresolved else "")
+        )
+    print(style.apply("Unresolved amounts are left out of the two rate columns here.",
+                      style.DIM))
+
+
+def print_wash_sales(report: IncomeReport, style: Style) -> None:
+    if not report.wash_sales:
+        return
+    print(style.apply("POSSIBLE WASH SALES", style.BOLD, style.YELLOW))
+    print(style.apply(
+        "Shares of the same symbol were bought within 30 days of these losses, so "
+        "part of each loss may be disallowed. Robinhood's gain may already reflect "
+        "this; check your 1099-B.", style.DIM,
+    ))
+    print(style.apply(
+        f"{'DATE':<10} {'SYMBOL':<7} {'LOSS':>11} {'REPLACED':>12} {'DISALLOWED':>11}  "
+        "REPLACEMENT BUYS", style.DIM,
+    ))
+    for item in report.wash_sales:
+        buys = ", ".join(
+            f"{buy.when:%m-%d} {buy.quantity.normalize():f}"
+            + (f" in {buy.account_label}" if buy.account_label != item.account_label
+               else "")
+            + (" (IRA: permanent)" if buy.tax_advantaged else "")
+            for buy in item.replacements
+        )
+        print(
+            f"{item.sale.when.isoformat():<10} {item.sale.symbol:<7} "
+            f"{_money(item.sale.gain):>11} {item.replaced.normalize():>12,f} "
+            f"{_money(item.disallowed):>11}  {buys}"
+        )
+    print(f"{'Possibly disallowed':<26} {_money(report.possibly_disallowed):>14}")
 
 
 def _money(value: Decimal) -> str:

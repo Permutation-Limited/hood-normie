@@ -230,13 +230,22 @@ class ConfigTest(unittest.TestCase):
                          {"VT": Decimal("0.85"), "BND": Decimal(0), "AAPL": Decimal(1)})
         self.assertEqual(config.holding_periods, {"DFGR": "long"})
 
+    def test_parses_a_loss_carryover(self):
+        config = parse_income_config({
+            "capital_loss_carryover": {"short_term": "1,200", "long_term": -300},
+        })
+        self.assertEqual((config.carryover_short, config.carryover_long),
+                         (Decimal(1200), Decimal(300)))
+
     def test_rejects_bad_values(self):
         raw: object
         for raw in ({"qualified_dividends": {"VT": 1.5}},
                     {"qualified_dividends": {"VT": True}},
                     {"qualified_dividends": {"VT": "most"}},
                     {"holding_periods": {"VT": "forever"}},
-                    {"holding_period": {}}):
+                    {"holding_period": {}},
+                    {"capital_loss_carryover": {"short": 5}},
+                    {"capital_loss_carryover": {"long_term": "lots"}}):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
                 parse_income_config(raw)  # type: ignore[arg-type]
 

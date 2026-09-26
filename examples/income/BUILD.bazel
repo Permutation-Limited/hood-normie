@@ -23,6 +23,8 @@ py_library(
         "dividends.py",
         "lots.py",
         "report.py",
+        "treatment.py",
+        "wash.py",
     ],
     deps = [
         ":core",
@@ -72,6 +74,24 @@ py_test(
 py_test(
     name = "lots_test",
     srcs = ["lots_test.py"],
+    deps = [
+        ":core",
+        ":report",
+    ],
+)
+
+py_test(
+    name = "treatment_test",
+    srcs = ["treatment_test.py"],
+    deps = [
+        ":core",
+        ":report",
+    ],
+)
+
+py_test(
+    name = "wash_test",
+    srcs = ["wash_test.py"],
     deps = [
         ":core",
         ":report",

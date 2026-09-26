@@ -13,8 +13,11 @@ from decimal import Decimal
 from typing import Mapping, Sequence, TypedDict
 
 from examples.income.core import (
-    AccountIncome, IncomeReport, IncomeTotals, cumulative, dividends_by_symbol,
-    estimated_tax_periods,
+    AccountIncome, IncomeReport, IncomeTotals, WashSale, cumulative,
+    dividends_by_symbol, estimated_tax_periods,
+)
+from examples.income.treatment import (
+    Treatment, TreatmentRange, period_treatments, treatment_range,
 )
 from examples.rebalance.core import Position, Recommendation
 from examples.rebalance.report import AccountHoldings, PortfolioReport, Report
@@ -274,6 +277,47 @@ class TaxPeriodJson(TypedDict):
     cumulative: IncomeTotalsJson
 
 
+class TreatmentJson(TypedDict):
+    ordinary: str
+    preferential: str
+    deductible_loss: str
+    carryforward: str
+
+
+class TreatmentRangeJson(TypedDict):
+    """Income by tax rate after netting; see examples/income/treatment.py."""
+
+    known: TreatmentJson
+    all_ordinary: TreatmentJson
+    all_preferential: TreatmentJson
+    unresolved_gains: str
+    unresolved_dividends: str
+
+
+class TaxablePeriodJson(TaxPeriodJson):
+    treatment: TreatmentRangeJson
+    cumulative_treatment: TreatmentRangeJson
+
+
+class ReplacementJson(TypedDict):
+    date: str
+    account_label: str
+    tax_advantaged: bool
+    quantity: str
+
+
+class WashSaleJson(TypedDict):
+    account_label: str
+    date: str
+    symbol: str
+    quantity: str
+    loss: str
+    replaced: str
+    disallowed: str
+    permanent: str
+    replacements: list[ReplacementJson]
+
+
 class IncomeAccountJson(TypedDict):
     label: str
     account_number: str
@@ -289,7 +333,12 @@ class IncomeJson(TypedDict):
     demo: bool
     year: int
     taxable_totals: IncomeTotalsJson
-    taxable_periods: list[TaxPeriodJson]
+    taxable_treatment: TreatmentRangeJson
+    taxable_periods: list[TaxablePeriodJson]
+    carryover_short: str
+    carryover_long: str
+    wash_sales: list[WashSaleJson]
+    possibly_disallowed: str
     accounts: list[IncomeAccountJson]
 
 
@@ -302,7 +351,14 @@ def income_json(report: IncomeReport, *, demo: bool = False,
         "demo": demo,
         "year": report.year,
         "taxable_totals": _income_totals_json(report.taxable_totals),
-        "taxable_periods": _periods_json(report.year, report.taxable_period_totals),
+        "taxable_treatment": _treatment_range_json(treatment_range(
+            report.taxable_totals, report.carryover_short, report.carryover_long
+        )),
+        "taxable_periods": _taxable_periods_json(report),
+        "carryover_short": str(report.carryover_short),
+        "carryover_long": str(report.carryover_long),
+        "wash_sales": [_wash_sale_json(item) for item in report.wash_sales],
+        "possibly_disallowed": str(report.possibly_disallowed),
         "accounts": [
             _income_account_json(account, report.year) for account in report.accounts
         ],
@@ -324,6 +380,56 @@ def _periods_json(year: int, totals: list[IncomeTotals]) -> list[TaxPeriodJson]:
             estimated_tax_periods(year), totals, cumulative(totals)
         )
     ]
+
+
+def _taxable_periods_json(report: IncomeReport) -> list[TaxablePeriodJson]:
+    totals = report.taxable_period_totals
+    running, own = period_treatments(
+        cumulative(totals), report.carryover_short, report.carryover_long
+    )
+    return [
+        {**period, "treatment": _treatment_range_json(mine),
+         "cumulative_treatment": _treatment_range_json(through)}
+        for period, mine, through in zip(_periods_json(report.year, totals), own, running)
+    ]
+
+
+def _treatment_range_json(value: TreatmentRange) -> TreatmentRangeJson:
+    return {
+        "known": _treatment_json(value.known),
+        "all_ordinary": _treatment_json(value.all_ordinary),
+        "all_preferential": _treatment_json(value.all_preferential),
+        "unresolved_gains": str(value.unresolved_gains),
+        "unresolved_dividends": str(value.unresolved_dividends),
+    }
+
+
+def _treatment_json(value: Treatment) -> TreatmentJson:
+    return {
+        "ordinary": str(value.ordinary),
+        "preferential": str(value.preferential),
+        "deductible_loss": str(value.deductible_loss),
+        "carryforward": str(value.carryforward),
+    }
+
+
+def _wash_sale_json(item: WashSale) -> WashSaleJson:
+    return {
+        "account_label": item.account_label,
+        "date": item.sale.when.isoformat(),
+        "symbol": item.sale.symbol,
+        "quantity": format(item.sale.quantity.normalize(), "f"),
+        "loss": str(item.sale.gain),
+        "replaced": format(item.replaced.normalize(), "f"),
+        "disallowed": str(item.disallowed),
+        "permanent": str(item.permanent),
+        "replacements": [
+            {"date": buy.when.isoformat(), "account_label": buy.account_label,
+             "tax_advantaged": buy.tax_advantaged,
+             "quantity": format(buy.quantity.normalize(), "f")}
+            for buy in item.replacements
+        ],
+    }
 
 
 def _income_account_json(account: AccountIncome, year: int) -> IncomeAccountJson:
