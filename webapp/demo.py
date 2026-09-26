@@ -8,10 +8,10 @@ shown, screenshotted, or developed against without an account.
 The numbers are fiction. The UI labels every demo response as such.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import os
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from examples.income.core import IncomeConfig, IncomeReport
 from examples.income.report import build_income_report
@@ -137,6 +137,8 @@ SALES: list[tuple[str, int, int, str, str, str, str, bool]] = [
     # Closed out entirely, so only the demo config can settle it.
     ("DEMO-TAXABLE", 3, 4, "SPAC", "400", "9.80", "-612.00", True),
     ("DEMO-TAXABLE", 3, 18, "EXITED", "50", "41.25", "905.10", True),
+    # Bought and sold in the account: replaying the orders settles it.
+    ("DEMO-TAXABLE", 4, 15, "TRADE", "30", "25.00", "150.00", True),
     # The oldest open lot is too young to prove anything.
     ("DEMO-TAXABLE", 5, 20, "MEME", "100", "3.40", "118.00", True),
     # A coin: the trade history lists it alongside equities.
@@ -144,24 +146,26 @@ SALES: list[tuple[str, int, int, str, str, str, str, bool]] = [
     ("DEMO-IRA", 4, 9, "BND", "60", "72.10", "-44.70", True),
 ]
 
-# Open lot acquisition dates, as whole years before the requested one plus a
-# month and day; zero years means earlier in the requested year itself.
-LOTS: Mapping[tuple[str, str], list[tuple[int, int, int]]] = {
-    ("DEMO-TAXABLE", "VTI"): [(4, 6, 12), (0, 1, 15)],
-    ("DEMO-TAXABLE", "MEME"): [(0, 1, 8)],
-    ("DEMO-TAXABLE", "SPAC"): [],
-    ("DEMO-TAXABLE", "EXITED"): [],
+# Buys the order history shows, as (account, month, day, symbol, quantity, price).
+BUYS: list[tuple[str, int, int, str, str, str]] = [
+    ("DEMO-TAXABLE", 1, 10, "TRADE", "30", "20.00"),
+]
+
+# Open lots, as (whole years before the requested one, month, day, quantity);
+# zero years means earlier in the requested year itself. A held symbol not
+# listed has one old lot of its whole position.
+LOTS: Mapping[tuple[str, str], list[tuple[int, int, int, str]]] = {
+    ("DEMO-TAXABLE", "VTI"): [(4, 6, 12, "280"), (0, 1, 15, "20")],
+    ("DEMO-TAXABLE", "MEME"): [(0, 1, 8, "200")],
 }
 
-# Reinvested dividends, as (account, symbol, per-quarter payment).
-DIVIDENDS: list[tuple[str, str, str]] = [
-    ("DEMO-TAXABLE", "VTI", "312.40"),
-    ("DEMO-TAXABLE", "VXUS", "188.15"),
-    ("DEMO-TAXABLE", "BND", "41.02"),
-    ("DEMO-TAXABLE", "OLDCO", "22.50"),
-    ("DEMO-IRA", "VTI", "187.44"),
-    ("DEMO-IRA", "BND", "109.38"),
-]
+# Quarterly dividends per share, and whether each account reinvests them.
+# OLDCO pays cash, so the demo shows an estimated cash dividend.
+DIVIDEND_PER_SHARE: Mapping[str, str] = {
+    "VTI": "1.04", "VXUS": "0.75", "BND": "0.27", "OLDCO": "0.045",
+}
+CASH_DIVIDENDS: frozenset[tuple[str, str]] = frozenset({("DEMO-TAXABLE", "OLDCO")})
+EX_DATES = ((3, 16), (6, 15), (9, 15), (12, 15))
 
 # What a user would put in income.yaml. OLDCO is left out on purpose, so the
 # demo shows an unclassified dividend.
@@ -175,6 +179,17 @@ INCOME_CONFIG = IncomeConfig(
 
 def _stamp(year: int, month: int, day: int, hour: int = 15) -> str:
     return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:30:00Z"
+
+
+def _fill(side: str, symbol: str, stamp: str, quantity: str, price: str,
+          agent: str = "user") -> JsonObject:
+    return {
+        "id": f"demo-{side}-{symbol}-{stamp}",
+        "symbol": symbol, "side": side, "state": "filled", "placed_agent": agent,
+        "quantity": quantity, "cumulative_quantity": quantity,
+        "average_price": price, "created_at": stamp, "last_transaction_at": stamp,
+        "executions": [{"timestamp": stamp, "quantity": quantity, "price": price}],
+    }
 
 
 class DemoIncomeSource:
@@ -199,36 +214,73 @@ class DemoIncomeSource:
             if account == account_number
         ]
 
+    def equity_positions(self, account_number: str) -> list[JsonObject]:
+        return [{"symbol": symbol, "quantity": quantity}
+                for symbol, quantity in HOLDINGS.get(account_number, [])]
+
     def equity_orders(self, account_number: str, **filters: str) -> list[JsonObject]:
         del filters
         orders: list[JsonObject] = []
         for account, month, day, symbol, quantity, price, _, equity in SALES:
             if account == account_number and equity:
-                stamp = _stamp(self.year, month, day)
-                orders.append({
-                    "symbol": symbol, "side": "sell", "state": "filled",
-                    "placed_agent": "user", "quantity": quantity,
-                    "cumulative_quantity": quantity, "average_price": price,
-                    "created_at": stamp, "last_transaction_at": stamp,
-                    "executions": [{"timestamp": stamp, "quantity": quantity}],
-                })
-        for account, symbol, amount in DIVIDENDS:
-            if account != account_number:
+                orders.append(_fill("sell", symbol, _stamp(self.year, month, day),
+                                    quantity, price))
+        for account, month, day, symbol, quantity, price in BUYS:
+            if account == account_number:
+                orders.append(_fill("buy", symbol, _stamp(self.year, month, day),
+                                    quantity, price))
+        for symbol, quantity in HOLDINGS.get(account_number, []):
+            per_share = DIVIDEND_PER_SHARE.get(symbol)
+            if per_share is None or (account_number, symbol) in CASH_DIVIDENDS:
                 continue
-            for month in (3, 6, 9, 12):
+            for month, day in EX_DATES:
+                # Reinvested a few days after the ex-date, as Robinhood does.
                 orders.append({
                     "symbol": symbol, "side": "buy", "state": "filled",
                     "placed_agent": "drip",
-                    "created_at": _stamp(self.year, month, 20, hour=2),
-                    "dollar_based_amount": {"amount": amount, "currency_code": "USD"},
+                    "created_at": _stamp(self.year, month, day + 4, hour=2),
+                    "dollar_based_amount": {
+                        "amount": str(Decimal(per_share) * Decimal(quantity)),
+                        "currency_code": "USD",
+                    },
                 })
         return orders
 
     def equity_tax_lots(self, account_number: str, symbol: str) -> list[JsonObject]:
+        held = dict(HOLDINGS.get(account_number, []))
+        lots = LOTS.get((account_number, symbol))
+        if lots is None:
+            lots = [(3, 1, 2, held[symbol])] if symbol in held else []
         return [
-            {"open_date": date(self.year - years, month, day).isoformat()}
-            for years, month, day in LOTS.get((account_number, symbol), [])
+            {"open_date": date(self.year - years, month, day).isoformat(),
+             "quantity": quantity}
+            for years, month, day, quantity in lots
         ]
+
+    def daily_closes(self, symbols: Iterable[str], start_time: str,
+                     adjustment_type: str) -> dict[str, dict[str, str]]:
+        """A flat $100 price whose dividend-adjusted series steps on each ex-date."""
+        day = date.fromisoformat(start_time[:10])
+        days: list[date] = []
+        while day <= date(self.year, 12, 31):
+            if day.weekday() < 5:
+                days.append(day)
+            day += timedelta(days=1)
+        closes: dict[str, dict[str, str]] = {}
+        for symbol in symbols:
+            per_share = DIVIDEND_PER_SHARE.get(symbol)
+            if per_share is None:
+                continue
+            ex_dates = [date(self.year, month, day) for month, day in EX_DATES]
+            closes[symbol] = {
+                item.isoformat(): str(
+                    Decimal(100) if adjustment_type != "all" else
+                    Decimal(100) - Decimal(per_share) * sum(
+                        1 for ex in ex_dates if ex > item)
+                )
+                for item in days
+            }
+        return closes
 
 
 def build_demo_income(year: int) -> IncomeReport:

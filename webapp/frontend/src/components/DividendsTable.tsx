@@ -22,6 +22,12 @@ const COLUMNS: readonly Column<DividendSummary>[] = [
   { id: "payments", label: "Payments", numeric: true, value: (row) => row.payments },
   { id: "paid", label: "Paid", numeric: true, value: (row) => Number(row.paid) },
   {
+    id: "cash",
+    label: "Cash (est.)",
+    numeric: true,
+    value: (row) => Number(row.estimated_cash),
+  },
+  {
     id: "qualified",
     label: "Qualified",
     numeric: true,
@@ -48,6 +54,7 @@ function csvRows(rows: readonly DividendSummary[], totals: IncomeTotals): CsvRow
       row.symbol,
       String(row.payments),
       row.paid,
+      row.estimated_cash,
       row.qualified,
       row.nonqualified,
       row.unclassified,
@@ -56,6 +63,7 @@ function csvRows(rows: readonly DividendSummary[], totals: IncomeTotals): CsvRow
       "TOTAL",
       null,
       totals.dividends,
+      totals.estimated_cash,
       totals.qualified,
       totals.nonqualified,
       totals.unclassified,
@@ -63,7 +71,10 @@ function csvRows(rows: readonly DividendSummary[], totals: IncomeTotals): CsvRow
   ];
 }
 
-/** One account's reinvested dividends by symbol, split by qualification. */
+/**
+ * One account's dividends by symbol, split by qualification. Reinvested
+ * amounts are exact; cash payments are estimated from price history.
+ */
 export default function DividendsTable({
   dividends,
   totals,
@@ -88,7 +99,7 @@ export default function DividendsTable({
         useFlexGap
         sx={{ mb: 1 }}
       >
-        <Typography variant="subtitle2">Reinvested dividends</Typography>
+        <Typography variant="subtitle2">Dividends</Typography>
         <Box sx={{ flexGrow: 1 }} />
         <TableSearch value={view.query} onChange={view.setQuery} label="symbols" />
         <CsvButton
@@ -107,7 +118,7 @@ export default function DividendsTable({
                 <TableCell colSpan={COLUMNS.length}>
                   <Typography variant="body2" color="text.secondary">
                     {view.total === 0
-                      ? "No reinvested dividends this year"
+                      ? "No dividends this year"
                       : `No symbol matches “${view.query}”`}
                   </Typography>
                 </TableCell>
@@ -121,6 +132,15 @@ export default function DividendsTable({
                 </TableCell>
                 <TableCell align="right" sx={numeric}>
                   {money(row.paid)}
+                </TableCell>
+                <TableCell
+                  align="right"
+                  sx={{
+                    ...numeric,
+                    color: Number(row.estimated_cash) === 0 ? "text.disabled" : undefined,
+                  }}
+                >
+                  {money(row.estimated_cash)}
                 </TableCell>
                 <TableCell align="right" sx={numeric}>
                   {money(row.qualified)}
@@ -147,6 +167,7 @@ export default function DividendsTable({
                 </TableCell>
                 {[
                   totals.dividends,
+                  totals.estimated_cash,
                   totals.qualified,
                   totals.nonqualified,
                   totals.unclassified,

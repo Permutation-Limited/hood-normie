@@ -72,14 +72,26 @@ still open, so a sale's term is inferred from what it left behind. Under
 first-in-first-out lot relief — Robinhood's default — everything a sale closed
 was acquired no later than the oldest lot still open. If that lot was already
 held more than a year on the sale date, so was everything sold, and the sale is
-**long-term**. Otherwise the tool says **unknown** rather than guessing. The
-`BASIS` column records which case applied:
+**long-term**.
+
+When the open lots cannot settle it, the account's whole order history is
+replayed first-in-first-out. If every share of the symbol was bought and sold
+in this account — what the buys and sells leave behind equals what it holds
+now — the replay recovers exactly which acquisitions each sale closed, so the
+sale is short- or long-term for certain, or split into both. Robinhood's gain
+stays the total; each part gets the gain its own lots imply, and any
+difference (fees, rounding) is shared by quantity. A position that shares
+were transferred into or out of fails that check and is left alone.
+
+Anything still unsettled is **unknown** rather than guessed. The `BASIS` column
+records which case applied:
 
 | Basis | Meaning |
 | --- | --- |
 | `older lot still open (FIFO)` | Inferred long-term |
 | `no older open lot` | The position was closed out, or every open lot is newer |
 | `oldest open lot under a year` | Could be either term |
+| `order history (FIFO)` | Settled exactly by replaying the account's orders |
 | `crypto or options` | Not an equity sale; no lots to consult |
 | `tax lots unavailable` | Robinhood could not list lots, e.g. a delisted symbol |
 | `set in config` | Settled by `holding_periods` in `income.yaml` |
@@ -92,10 +104,30 @@ A trade counts as an equity sale only when it lines up in time with one of the
 account's equity sell orders, since the trade history mixes equities, options,
 and crypto under bare tickers that can collide (SUI is both a REIT and a coin).
 
-**Dividends are visible only when reinvested.** There is no dividend tool; each
-DRIP purchase is an equity order whose dollar amount is the payment. A dividend
-taken as cash leaves no trace here. The date is the day the reinvestment was
-placed, which may be a day off the pay date.
+What stays unknown is what the MCP server cannot show at all: shares that
+arrived by transfer and have since been sold (their lots are closed and no buy
+exists here), and crypto, whose history lists sales but not how the coins were
+acquired.
+
+**Dividends have no tool either.** Two sources fill the gap:
+
+- *Reinvested* dividends are exact. Each DRIP purchase is an equity order whose
+  dollar amount is the payment, dated the day it was placed.
+- *Cash* dividends are estimated from price history. Robinhood's
+  dividend-adjusted closes are the split-adjusted closes minus every later
+  dividend, so the gap between the two series drops by exactly the per-share
+  dividend on each ex-date. Shares entitled are the open lots acquired before
+  the ex-date plus any sold on or after it. An ex-date that no DRIP purchase
+  follows within 45 days is taken as paid in cash, and dated by its ex-date.
+
+Checked against every reinvested dividend (whose amount is known exactly), the
+estimate matched to the cent in 26 of 30 cases. The misses, of 1–4%, were all
+positions receiving lots transferred in after the ex-date: a transferred lot
+keeps its original purchase date, so it looks as if it had been there all along.
+Price adjustments also cover fund capital-gain distributions and return of
+capital, which are taxed differently from dividends; the tool cannot tell them
+apart. The `CASH (EST.)` column shows how much of each symbol's total is
+estimated.
 
 **Qualified status is never reported**, so it comes from configuration.
 

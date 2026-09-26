@@ -98,6 +98,8 @@ export interface IncomeTotals {
   nonqualified: string;
   unclassified: string;
   dividends: string;
+  /** The part of `dividends` estimated from price history: cash payments. */
+  estimated_cash: string;
 }
 
 /**
@@ -138,6 +140,8 @@ export interface DividendSummary {
   qualified: string;
   nonqualified: string;
   unclassified: string;
+  /** Cash payments, estimated; the rest of `paid` was reinvested and exact. */
+  estimated_cash: string;
 }
 
 export interface IncomeAccount {

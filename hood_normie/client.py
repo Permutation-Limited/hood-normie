@@ -3,7 +3,7 @@
 from typing import Callable, Iterable, NotRequired, TypedDict
 
 from hood_normie.accounts import account_label, account_number, account_records, select_account
-from hood_normie.mcp import RobinhoodMcpClient
+from hood_normie.mcp import McpError, RobinhoodMcpClient
 from hood_normie.oauth import DEFAULT_ENDPOINT, load_access_token
 from hood_normie.types import JsonObject, JsonValue, MoneyValue
 
@@ -90,6 +90,65 @@ class RobinhoodClient:
         if cursor:
             arguments["cursor"] = cursor
         return self.mcp.call_tool("get_equity_tax_lots", arguments)
+
+    def get_equity_historicals(
+        self, symbols: Iterable[str], start_time: str, end_time: str | None = None,
+        interval: str = "day", adjustment_type: str = "split",
+    ) -> JsonValue:
+        symbol_values: list[JsonValue] = []
+        symbol_values.extend(sorted(set(symbols)))
+        arguments: dict[str, JsonValue] = {
+            "symbols": symbol_values, "start_time": start_time,
+            "interval": interval, "adjustment_type": adjustment_type,
+        }
+        if end_time:
+            arguments["end_time"] = end_time
+        return self.mcp.call_tool("get_equity_historicals", arguments)
+
+    def equity_positions(self, account_number: str) -> list[JsonObject]:
+        """Every open equity position in an account, across all pages."""
+        return collect_pages(
+            lambda cursor: self.mcp.call_tool(
+                "get_equity_positions",
+                {"account_number": account_number, **({"cursor": cursor} if cursor else {})},
+            ),
+            "positions",
+        )
+
+    def daily_closes(
+        self, symbols: Iterable[str], start_time: str, adjustment_type: str
+    ) -> dict[str, dict[str, str]]:
+        """Each symbol's daily closes by date (YYYY-MM-DD), as exact strings.
+
+        Symbols go ten to a call, the tool's limit; a symbol Robinhood cannot
+        chart is simply absent from the result.
+        """
+        ordered = sorted(set(symbols))
+        closes: dict[str, dict[str, str]] = {}
+        batches = [ordered[start:start + 10] for start in range(0, len(ordered), 10)]
+        while batches:
+            batch = batches.pop(0)
+            try:
+                payload = self.get_equity_historicals(
+                    batch, start_time, adjustment_type=adjustment_type
+                )
+            except McpError:
+                # One unchartable symbol (delisted, a warrant) fails its whole
+                # batch; retry the others alone so only that one goes missing.
+                if len(batch) > 1:
+                    batches.extend([symbol] for symbol in batch)
+                continue
+            for series in find_records_with_fields(payload, ("symbol",), ("bars",)):
+                bars = series.get("bars")
+                if not isinstance(bars, list):
+                    continue
+                closes[str(series["symbol"]).upper()] = {
+                    str(bar["begins_at"])[:10]: str(bar["close_price"])
+                    for bar in bars
+                    if isinstance(bar, dict) and bar.get("begins_at")
+                    and bar.get("close_price") is not None
+                }
+        return closes
 
     def realized_trades(self, account_number: str, span: str) -> list[JsonObject]:
         """Every closing trade in a preset span, newest first, across all pages."""

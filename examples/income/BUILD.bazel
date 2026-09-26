@@ -19,7 +19,11 @@ py_library(
 
 py_library(
     name = "report",
-    srcs = ["report.py"],
+    srcs = [
+        "dividends.py",
+        "lots.py",
+        "report.py",
+    ],
     deps = [
         ":core",
         "//hood_normie",
@@ -53,6 +57,24 @@ py_test(
         ":core",
         ":report",
         "//hood_normie",
+    ],
+)
+
+py_test(
+    name = "dividends_test",
+    srcs = ["dividends_test.py"],
+    deps = [
+        ":core",
+        ":report",
+    ],
+)
+
+py_test(
+    name = "lots_test",
+    srcs = ["lots_test.py"],
+    deps = [
+        ":core",
+        ":report",
     ],
 )
 

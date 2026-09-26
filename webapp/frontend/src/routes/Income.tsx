@@ -99,10 +99,11 @@ export default function Income(): ReactElement {
       notice={
         <>
           Sorted into the buckets a tax estimate needs; no tax is computed.
-          Robinhood reports neither holding periods nor qualified status, so a
-          term is inferred only when an older lot is still open, and qualified
-          shares come from <code>income.yaml</code>. Only reinvested dividends
-          are visible. Treat these as estimates, not a 1099.
+          Robinhood reports neither holding periods nor qualified status: a
+          term is inferred from open lots or the order history, and qualified
+          shares come from <code>income.yaml</code>. Reinvested dividends are
+          exact; cash dividends are estimated from price history and dated by
+          ex-date. Treat these as estimates, not a 1099.
         </>
       }
       error={error}
@@ -111,7 +112,7 @@ export default function Income(): ReactElement {
       loadingMessage={
         isDemo
           ? "Building the demo income…"
-          : "Fetching trades, orders, and tax lots from Robinhood…"
+          : "Fetching trades, orders, tax lots, and price history from Robinhood…"
       }
     >
       <ToggleButtonGroup

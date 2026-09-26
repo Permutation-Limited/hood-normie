@@ -162,6 +162,12 @@ class IncomeJsonTest(unittest.TestCase):
         self.assertEqual(terms["EXITED"], ("long", "set in config"))
         self.assertEqual(terms["MEME"][0], "unknown")
         self.assertEqual(terms["BTC"], ("unknown", "crypto or options"))
+        self.assertEqual(terms["TRADE"], ("short", "order history (FIFO)"))
+        oldco = next(row for row in taxable["dividends"] if row["symbol"] == "OLDCO")
+        self.assertEqual(oldco["estimated_cash"], oldco["paid"])
+        self.assertEqual(oldco["paid"], "90.00")
+        vti = next(row for row in taxable["dividends"] if row["symbol"] == "VTI")
+        self.assertEqual(vti["estimated_cash"], "0")
         totals = payload["taxable_totals"]
         for bucket in ("short_term", "long_term", "unknown_term", "qualified",
                        "nonqualified", "unclassified"):
@@ -173,7 +179,7 @@ class IncomeJsonTest(unittest.TestCase):
         vti = next(row for row in payload["accounts"][0]["dividends"]
                    if row["symbol"] == "VTI")
         self.assertEqual(vti["payments"], 4)
-        self.assertEqual(vti["paid"], "1249.60")
+        self.assertEqual(vti["paid"], "1248.00")
         self.assertEqual(Decimal(vti["qualified"]) + Decimal(vti["nonqualified"]),
                          Decimal(vti["paid"]))
 

@@ -63,7 +63,7 @@ class PrintAccountTest(unittest.TestCase):
             sales=(), dividends=()))
         self.assertIn("tax-advantaged", rendered)
         self.assertIn("(no closing trades)", rendered)
-        self.assertIn("(no reinvested dividends)", rendered)
+        self.assertIn("(no dividends)", rendered)
         self.assertIn("Realized gains", rendered)
         self.assertNotIn("Long-term gains", rendered)
 

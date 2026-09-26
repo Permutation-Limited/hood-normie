@@ -236,6 +236,9 @@ class IncomeTotalsJson(TypedDict):
     nonqualified: str
     unclassified: str
     dividends: str
+    # The part of `dividends` estimated from price history: cash payments,
+    # which Robinhood's MCP does not report.
+    estimated_cash: str
 
 
 class SaleJson(TypedDict):
@@ -256,6 +259,7 @@ class DividendJson(TypedDict):
     qualified: str
     nonqualified: str
     unclassified: str
+    estimated_cash: str
 
 
 class TaxPeriodJson(TypedDict):
@@ -355,6 +359,7 @@ def _income_account_json(account: AccountIncome, year: int) -> IncomeAccountJson
                 "qualified": str(totals.qualified),
                 "nonqualified": str(totals.nonqualified),
                 "unclassified": str(totals.unclassified),
+                "estimated_cash": str(totals.estimated_cash),
             }
             for symbol, totals in dividends_by_symbol(account.dividends).items()
         ],
@@ -371,4 +376,5 @@ def _income_totals_json(totals: IncomeTotals) -> IncomeTotalsJson:
         "nonqualified": str(totals.nonqualified),
         "unclassified": str(totals.unclassified),
         "dividends": str(totals.dividends),
+        "estimated_cash": str(totals.estimated_cash),
     }

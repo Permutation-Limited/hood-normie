@@ -100,20 +100,22 @@ def print_account(account: AccountIncome, year: int, style: Style | None = None,
                 + style.apply(sale.reason, style.DIM)
             )
 
-    print(style.apply("DIVIDENDS (reinvested)", style.BOLD))
+    print(style.apply("DIVIDENDS", style.BOLD))
     by_symbol = dividends_by_symbol(account.dividends)
     if not by_symbol:
-        print(style.apply("(no reinvested dividends)", style.DIM))
+        print(style.apply("(no dividends)", style.DIM))
     else:
         print(style.apply(
-            f"{'SYMBOL':<7} {'PAID':>12} {'QUALIFIED':>12} {'NON-QUAL':>12} "
-            f"{'UNCLASSIFIED':>12}", style.DIM,
+            f"{'SYMBOL':<7} {'PAID':>12} {'CASH (EST.)':>12} {'QUALIFIED':>12} "
+            f"{'NON-QUAL':>12} {'UNCLASSIFIED':>12}", style.DIM,
         ))
         for symbol, totals in by_symbol.items():
             unclassified = _money(totals.unclassified)
+            cash = _money(totals.estimated_cash) if totals.estimated_cash else "-"
             print(
                 f"{symbol:<7} {_money(totals.dividends):>12} "
-                f"{_money(totals.qualified):>12} {_money(totals.nonqualified):>12} "
+                + style.apply(f"{cash:>12}", style.DIM if not totals.estimated_cash else "")
+                + f" {_money(totals.qualified):>12} {_money(totals.nonqualified):>12} "
                 + style.apply(f"{unclassified:>12}",
                               style.YELLOW if totals.unclassified else "")
             )
@@ -142,6 +144,11 @@ def print_summary(totals: IncomeTotals, style: Style) -> None:
     for label, value, needs_attention in rows:
         line = f"{label:<24} {_money(value):>14}"
         print(style.apply(line, style.YELLOW) if needs_attention and value else line)
+    if totals.estimated_cash:
+        print(style.apply(
+            f"{'  of which cash (est.)':<24} {_money(totals.estimated_cash):>14}",
+            style.DIM,
+        ))
 
 
 def print_periods(periods: list[IncomeTotals], year: int, style: Style,

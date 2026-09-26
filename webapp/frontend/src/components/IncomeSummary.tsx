@@ -15,9 +15,11 @@ interface Figure {
 function FigureGroup({
   title,
   figures,
+  note,
 }: {
   title: string;
   figures: readonly Figure[];
+  note?: string | undefined;
 }): ReactElement {
   return (
     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -52,8 +54,20 @@ function FigureGroup({
           );
         })}
       </Stack>
+      {note && (
+        <Typography variant="caption" color="text.secondary">
+          {note}
+        </Typography>
+      )}
     </Box>
   );
+}
+
+/** Says how much of the dividends shown are estimates rather than reported. */
+function cashNote(totals: IncomeTotals): string | undefined {
+  return Number(totals.estimated_cash) === 0
+    ? undefined
+    : `Includes ${money(totals.estimated_cash)} of cash dividends estimated from price history`;
 }
 
 /**
@@ -75,6 +89,7 @@ export default function IncomeSummary({
           { label: "Realized gains", value: totals.realized },
           { label: "Dividends", value: totals.dividends },
         ]}
+        note={cashNote(totals)}
       />
     );
   }
@@ -95,6 +110,7 @@ export default function IncomeSummary({
           { label: "Non-qualified", value: totals.nonqualified },
           { label: "Unclassified", value: totals.unclassified, unresolved: true },
         ]}
+        note={cashNote(totals)}
       />
     </Stack>
   );

@@ -99,9 +99,11 @@ bazel run //examples/income
 bazel run //examples/income -- --year 2025
 ```
 
-Robinhood's MCP reports neither holding periods nor qualified status, and shows
-dividends only when they were reinvested, so the report infers what it safely
-can, marks the rest unknown, and takes the gaps from an optional `income.yaml`.
+Robinhood's MCP reports neither holding periods, qualified status, nor
+dividends. The report infers holding periods from open lots and the order
+history, reads reinvested dividends from DRIP orders, estimates cash dividends
+from price history, marks what is left unknown, and takes the gaps from an
+optional `income.yaml`.
 Each taxable account is also split by the IRS's estimated-tax periods (Jan–Mar,
 Apr–May, Jun–Aug, Sep–Dec), per period or year to date for the annualized
 method. Retirement accounts are listed but kept out of the taxable totals. How each

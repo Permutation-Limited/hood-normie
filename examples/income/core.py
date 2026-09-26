@@ -56,6 +56,7 @@ NOT_EQUITY = "crypto or options"
 LOTS_UNAVAILABLE = "tax lots unavailable"
 TAX_ADVANTAGED = "tax-advantaged account"
 CONFIGURED = "set in config"
+REPLAYED = "order history (FIFO)"
 
 
 class IncomeConfigFile(TypedDict, total=False):
@@ -101,6 +102,8 @@ class Dividend:
     amount: Decimal
     # None when nothing says how this symbol's dividends are taxed.
     qualified_fraction: Decimal | None
+    # False for a cash payment estimated from price history (see dividends.py).
+    reinvested: bool = True
 
     @property
     def qualified(self) -> Decimal:
@@ -128,6 +131,8 @@ class IncomeTotals:
     qualified: Decimal = Decimal(0)
     nonqualified: Decimal = Decimal(0)
     unclassified: Decimal = Decimal(0)
+    # The part of the three dividend buckets estimated rather than reported.
+    estimated_cash: Decimal = Decimal(0)
 
     @property
     def realized(self) -> Decimal:
@@ -145,6 +150,7 @@ class IncomeTotals:
             qualified=self.qualified + other.qualified,
             nonqualified=self.nonqualified + other.nonqualified,
             unclassified=self.unclassified + other.unclassified,
+            estimated_cash=self.estimated_cash + other.estimated_cash,
         )
 
 
@@ -252,6 +258,9 @@ def income_totals(
         qualified=sum((item.qualified for item in paid), Decimal(0)),
         nonqualified=sum((item.nonqualified for item in paid), Decimal(0)),
         unclassified=sum((item.unclassified for item in paid), Decimal(0)),
+        estimated_cash=sum(
+            (item.amount for item in paid if not item.reinvested), Decimal(0)
+        ),
     )
 
 
@@ -262,6 +271,7 @@ def dividends_by_symbol(dividends: Iterable[Dividend]) -> dict[str, IncomeTotals
         grouped[item.symbol] = grouped.get(item.symbol, IncomeTotals()) + IncomeTotals(
             qualified=item.qualified, nonqualified=item.nonqualified,
             unclassified=item.unclassified,
+            estimated_cash=Decimal(0) if item.reinvested else item.amount,
         )
     return grouped
 
@@ -307,9 +317,16 @@ def text_field(record: JsonObject, name: str) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def equity_sell_times(orders: Iterable[JsonObject]) -> dict[str, list[datetime]]:
-    """Every moment each filled equity sell order was placed or executed."""
-    times: dict[str, list[datetime]] = {}
+SellTimes = Mapping[str, list[tuple[str, datetime]]]
+
+# One acquisition's share of a sale, as order-history replay recovers it:
+# (acquired, quantity, cost per share).
+ClosedPortion = tuple[date, Decimal, Decimal]
+
+
+def equity_sell_times(orders: Iterable[JsonObject]) -> dict[str, list[tuple[str, datetime]]]:
+    """Every moment each executed equity sell order was placed or executed."""
+    times: dict[str, list[tuple[str, datetime]]] = {}
     for order in orders:
         symbol = text_field(order, "symbol")
         if order.get("side") != "sell" or symbol is None:
@@ -322,26 +339,34 @@ def equity_sell_times(orders: Iterable[JsonObject]) -> dict[str, list[datetime]]
             stamps.extend(
                 item.get("timestamp") for item in executions if isinstance(item, dict)
             )
+        order_id = text_field(order, "id") or ""
         times.setdefault(symbol.upper(), []).extend(
-            parse_timestamp(stamp) for stamp in stamps if isinstance(stamp, str) and stamp
+            (order_id, parse_timestamp(stamp))
+            for stamp in stamps if isinstance(stamp, str) and stamp
         )
     return times
 
 
-def is_equity_sale(
-    symbol: str, timestamp: str, sell_times: Mapping[str, list[datetime]]
-) -> bool:
+def matching_sell_order(
+    symbol: str, timestamp: str, sell_times: SellTimes
+) -> str | None:
+    """The id of the equity sell order a trade belongs to, if any."""
+    moment = parse_timestamp(timestamp)
+    return next(
+        (order_id for order_id, candidate in sell_times.get(symbol.upper(), [])
+         if abs(moment - candidate) <= MATCH_TOLERANCE),
+        None,
+    )
+
+
+def is_equity_sale(symbol: str, timestamp: str, sell_times: SellTimes) -> bool:
     """Whether a trade is one of the account's equity sell orders.
 
     The trade history mixes equities, options, and crypto under bare symbols,
     and tickers collide across them (SUI is both a REIT and a coin), so the
     symbol alone cannot tell them apart; the time of the order can.
     """
-    moment = parse_timestamp(timestamp)
-    return any(
-        abs(moment - candidate) <= MATCH_TOLERANCE
-        for candidate in sell_times.get(symbol.upper(), [])
-    )
+    return matching_sell_order(symbol, timestamp, sell_times) is not None
 
 
 def lot_dates(lots: Iterable[JsonObject]) -> list[date]:
@@ -353,18 +378,33 @@ def lot_dates(lots: Iterable[JsonObject]) -> list[date]:
     return dates
 
 
+def lot_quantities(lots: Iterable[JsonObject]) -> list[tuple[date, Decimal]]:
+    """Each open lot's acquisition date and share count."""
+    found: list[tuple[date, Decimal]] = []
+    for lot in lots:
+        opened = text_field(lot, "open_date")
+        quantity = lot.get("quantity")
+        if opened is not None and quantity is not None:
+            found.append((date.fromisoformat(opened[:10]), decimal(quantity)))
+    return found
+
+
 def classify_sales(
     trades: Iterable[JsonObject],
     year: int,
-    sell_times: Mapping[str, list[datetime]],
+    sell_times: SellTimes,
     open_lots: Mapping[str, list[date] | None],
     config: IncomeConfig,
     tax_advantaged: bool = False,
+    closed_lots: Mapping[str, list[ClosedPortion]] | None = None,
 ) -> list[Sale]:
     """Turn `get_pnl_trade_history` records from one year into classified sales.
 
     `open_lots` maps an equity symbol to its open lot dates, or None when they
-    could not be read. A tax-advantaged account's sales are left unclassified.
+    could not be read. `closed_lots` maps a sell order id to the acquisitions
+    it closed, where the order history could be replayed (see lots.py); a sale
+    the open lots cannot settle is split by those instead. A tax-advantaged
+    account's sales are left unclassified.
     """
     sales: list[Sale] = []
     for trade in trades:
@@ -377,7 +417,12 @@ def classify_sales(
         if when.year != year:
             continue
         symbol = symbol.upper()
-        asset = EQUITY if is_equity_sale(symbol, timestamp, sell_times) else OTHER
+        order_id = matching_sell_order(symbol, timestamp, sell_times)
+        asset = EQUITY if order_id is not None else OTHER
+        quantity = decimal(trade.get("quantity") or 0)
+        price = decimal(trade.get("price") or 0)
+        # An order without an id cannot be told apart from another one.
+        portions = (closed_lots or {}).get(order_id) if order_id else None
         term: Term
         if tax_advantaged:
             term, reason = "unknown", TAX_ADVANTAGED
@@ -387,16 +432,55 @@ def classify_sales(
             term, reason = "unknown", LOTS_UNAVAILABLE
         else:
             term, reason = infer_term(when, dates)
+        if term == "unknown" and not tax_advantaged and asset == EQUITY and portions:
+            sales.extend(split_by_lots(
+                when, symbol, quantity, price, decimal(gain), portions
+            ))
+            continue
         if (term == "unknown" and not tax_advantaged
                 and symbol in config.holding_periods):
             term, reason = config.holding_periods[symbol], CONFIGURED
         sales.append(Sale(
-            when=when, symbol=symbol,
-            quantity=decimal(trade.get("quantity") or 0),
-            price=decimal(trade.get("price") or 0),
+            when=when, symbol=symbol, quantity=quantity, price=price,
             gain=decimal(gain), asset=asset, term=term, reason=reason,
         ))
     return sorted(sales, key=lambda sale: (sale.when, sale.symbol))
+
+
+def split_by_lots(
+    when: date, symbol: str, quantity: Decimal, price: Decimal, gain: Decimal,
+    portions: Iterable[ClosedPortion],
+) -> list[Sale]:
+    """One sale per holding period among the lots it closed.
+
+    Robinhood's gain stays the total. Each part gets the gain its own lots
+    imply, and whatever that misses (fees, rounding) is shared by quantity.
+    """
+    closed = list(portions)
+    replayed = sum((item[1] for item in closed), Decimal(0))
+    # A trade can be one of several fills of its order; take its share.
+    scale = quantity / replayed if replayed and quantity else Decimal(1)
+    parts: dict[Term, list[Decimal]] = {}
+    for acquired, shares, cost in closed:
+        term: Term = "long" if is_long_term(acquired, when) else "short"
+        bucket = parts.setdefault(term, [Decimal(0), Decimal(0)])
+        bucket[0] += shares * scale
+        bucket[1] += shares * scale * cost
+    total = sum((bucket[0] for bucket in parts.values()), Decimal(0))
+    implied = {term: price * bucket[0] - bucket[1] for term, bucket in parts.items()}
+    missing = gain - sum(implied.values(), Decimal(0))
+    sales: list[Sale] = []
+    remaining = gain
+    for index, (term, (shares, _)) in enumerate(sorted(parts.items())):
+        last = index == len(parts) - 1
+        part = remaining if last else (
+            implied[term] + missing * shares / total).quantize(CENT)
+        remaining -= part
+        sales.append(Sale(
+            when=when, symbol=symbol, quantity=shares.quantize(Decimal("0.000001")),
+            price=price, gain=part, asset=EQUITY, term=term, reason=REPLAYED,
+        ))
+    return sales
 
 
 def reinvested_dividends(
