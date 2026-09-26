@@ -37,6 +37,16 @@ const VIEWS = [
       "accounts, showing the dollar adjustment per asset class each configured " +
       "portfolio needs to reach its target allocation.",
   },
+  {
+    title: "Income",
+    to: "/income",
+    cta: "Open income",
+    command: "bazel run //examples/income",
+    description:
+      "A year's realized gains split short- and long-term, and reinvested " +
+      "dividends split qualified and non-qualified, per account — the inputs to " +
+      "an estimated tax payment, without the estimate.",
+  },
 ] as const;
 
 export default function Home(): ReactElement {

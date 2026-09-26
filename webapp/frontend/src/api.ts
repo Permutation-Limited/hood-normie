@@ -88,6 +88,61 @@ export interface HoldingsReport {
   accounts: HoldingAccount[];
 }
 
+/** One bucket per line of a tax estimate; retirement accounts add to none. */
+export interface IncomeTotals {
+  short_term: string;
+  long_term: string;
+  unknown_term: string;
+  realized: string;
+  qualified: string;
+  nonqualified: string;
+  unclassified: string;
+  dividends: string;
+}
+
+export type Term = "short" | "long" | "unknown";
+
+/** One closing trade from Robinhood's realized P&L history. */
+export interface Sale {
+  date: string;
+  symbol: string;
+  quantity: string;
+  price: string;
+  gain: string;
+  asset: "equity" | "other";
+  term: Term;
+  /** How the term was decided; an inference, never a broker-reported fact. */
+  reason: string;
+}
+
+/** One symbol's reinvested dividends for the year. */
+export interface DividendSummary {
+  symbol: string;
+  payments: number;
+  paid: string;
+  qualified: string;
+  nonqualified: string;
+  unclassified: string;
+}
+
+export interface IncomeAccount {
+  label: string;
+  account_number: string;
+  tax_advantaged: boolean;
+  totals: IncomeTotals;
+  sales: Sale[];
+  dividends: DividendSummary[];
+}
+
+/** A year's realized income, mirroring `//examples/income`. */
+export interface IncomeReport {
+  generated_at: string;
+  demo: boolean;
+  year: number;
+  taxable_totals: IncomeTotals;
+  accounts: IncomeAccount[];
+}
+
 export class ApiError extends Error {}
 
 interface FetchOptions {
@@ -95,8 +150,17 @@ interface FetchOptions {
   signal?: AbortSignal;
 }
 
-async function get<T>(path: string, options: FetchOptions): Promise<T> {
-  const query = options.demo ? "?demo=1" : "";
+async function get<T>(
+  path: string,
+  options: FetchOptions,
+  params: Record<string, string> = {},
+): Promise<T> {
+  const search = new URLSearchParams(params);
+  if (options.demo) {
+    search.set("demo", "1");
+  }
+  const encoded = search.toString();
+  const query = encoded ? `?${encoded}` : "";
   const response = await fetch(`${path}${query}`, {
     signal: options.signal ?? null,
   });
@@ -127,4 +191,11 @@ export async function fetchHoldings(
   options: FetchOptions = {},
 ): Promise<HoldingsReport> {
   return get<HoldingsReport>("/api/holdings", options);
+}
+
+export async function fetchIncome(
+  year: number,
+  options: FetchOptions = {},
+): Promise<IncomeReport> {
+  return get<IncomeReport>("/api/income", options, { year: String(year) });
 }

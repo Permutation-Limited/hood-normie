@@ -1,6 +1,6 @@
 """High-level, normalized client for Robinhood's Trading MCP tools."""
 
-from typing import Iterable, NotRequired, TypedDict
+from typing import Callable, Iterable, NotRequired, TypedDict
 
 from hood_normie.accounts import account_label, account_number, account_records, select_account
 from hood_normie.mcp import RobinhoodMcpClient
@@ -65,6 +65,51 @@ class RobinhoodClient:
     def get_equity_positions(self, account_number: str) -> JsonValue:
         return self.mcp.call_tool(
             "get_equity_positions", {"account_number": account_number}
+        )
+
+    def get_pnl_trade_history(
+        self, account_number: str, span: str, cursor: str | None = None
+    ) -> JsonValue:
+        arguments: dict[str, JsonValue] = {"account_number": account_number, "span": span}
+        if cursor:
+            arguments["cursor"] = cursor
+        return self.mcp.call_tool("get_pnl_trade_history", arguments)
+
+    def get_equity_orders(
+        self, account_number: str, cursor: str | None = None, **filters: str
+    ) -> JsonValue:
+        arguments: dict[str, JsonValue] = {"account_number": account_number, **filters}
+        if cursor:
+            arguments["cursor"] = cursor
+        return self.mcp.call_tool("get_equity_orders", arguments)
+
+    def get_equity_tax_lots(
+        self, account_number: str, symbol: str, cursor: str | None = None
+    ) -> JsonValue:
+        arguments: dict[str, JsonValue] = {"account_number": account_number, "symbol": symbol}
+        if cursor:
+            arguments["cursor"] = cursor
+        return self.mcp.call_tool("get_equity_tax_lots", arguments)
+
+    def realized_trades(self, account_number: str, span: str) -> list[JsonObject]:
+        """Every closing trade in a preset span, newest first, across all pages."""
+        return collect_pages(
+            lambda cursor: self.get_pnl_trade_history(account_number, span, cursor),
+            "trades",
+        )
+
+    def equity_orders(self, account_number: str, **filters: str) -> list[JsonObject]:
+        """Every equity order matching the filters, newest first, across all pages."""
+        return collect_pages(
+            lambda cursor: self.get_equity_orders(account_number, cursor, **filters),
+            "orders",
+        )
+
+    def equity_tax_lots(self, account_number: str, symbol: str) -> list[JsonObject]:
+        """Every open tax lot of one holding, across all pages."""
+        return collect_pages(
+            lambda cursor: self.get_equity_tax_lots(account_number, symbol, cursor),
+            "tax_lots",
         )
 
     def get_equity_quotes(self, symbols: Iterable[str]) -> JsonValue:
@@ -141,6 +186,40 @@ class RobinhoodClient:
                 "positions": normalized["positions"],
             })
         return holdings
+
+
+# Guards against a cursor that never empties; far beyond any real history.
+MAX_PAGES = 200
+
+
+def collect_pages(
+    fetch: Callable[[str | None], JsonValue], field: str
+) -> list[JsonObject]:
+    """Follow Robinhood's opaque cursors, gathering one list field from each page.
+
+    Tools disagree on the cursor's name (`next` or `next_cursor`), and an empty
+    string or null ends the listing either way.
+    """
+    records: list[JsonObject] = []
+    cursor: str | None = None
+    for _ in range(MAX_PAGES):
+        page = fetch(cursor)
+        data = page.get("data", page) if isinstance(page, dict) else None
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"unexpected page shape while listing {field}: {response_shape(page)}"
+            )
+        items = data.get(field)
+        if not isinstance(items, list):
+            raise ValueError(
+                f"Robinhood response has no {field} list: {response_shape(page)}"
+            )
+        records.extend(item for item in items if isinstance(item, dict))
+        following = first(data, "next_cursor", "next")
+        if not isinstance(following, str) or not following:
+            return records
+        cursor = following
+    raise ValueError(f"gave up listing {field} after {MAX_PAGES} pages")
 
 
 def normalize_account(

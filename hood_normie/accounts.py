@@ -1,5 +1,6 @@
 """Parse and select accounts from Robinhood MCP responses."""
 
+import re
 from typing import TypedDict
 
 from hood_normie.types import JsonObject, JsonValue, is_json_value
@@ -113,6 +114,19 @@ def account_summary(account: JsonObject) -> AccountSummary:
         "account_number": text(account_number(account)),
         "nickname": text(first(account, *NICKNAME_FIELDS)),
     }
+
+
+# Words in a brokerage type that mark an account whose gains and income are not
+# taxed as they occur. Robinhood spells them `ira_roth`, `ira_traditional`.
+TAX_ADVANTAGED_MARKERS = frozenset({"ira", "roth", "401k", "403b", "hsa", "retirement"})
+
+
+def is_tax_advantaged(account: JsonObject) -> bool:
+    """Whether an account is a retirement or similar tax-advantaged account."""
+    if first(account, "retirement_account_type", "retirementAccountType") is not None:
+        return True
+    status = (text(first(account, *TAX_STATUS_FIELDS)) or "").lower()
+    return not TAX_ADVANTAGED_MARKERS.isdisjoint(re.split(r"[^a-z0-9]+", status))
 
 
 def account_label(number: str, account: JsonObject | None) -> str:

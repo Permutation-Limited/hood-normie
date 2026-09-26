@@ -19,6 +19,7 @@ const NAV = [
   { label: "Accounts", to: "/accounts" },
   { label: "Holdings", to: "/holdings" },
   { label: "Rebalance", to: "/rebalance" },
+  { label: "Income", to: "/income" },
 ] as const;
 
 export default function Layout(): ReactElement {

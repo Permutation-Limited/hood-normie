@@ -8,10 +8,13 @@ shown, screenshotted, or developed against without an account.
 The numbers are fiction. The UI labels every demo response as such.
 """
 
+from datetime import date
 from decimal import Decimal
 import os
 from typing import Mapping
 
+from examples.income.core import IncomeConfig, IncomeReport
+from examples.income.report import build_income_report
 from examples.rebalance.report import Report, build_report
 from hood_normie.accounts import account_label
 from hood_normie.client import (
@@ -124,3 +127,110 @@ def demo_holdings() -> list[LabeledAccount]:
             "positions": account["positions"],
         })
     return holdings
+
+
+# Closing trades for the Income tab, as (account, month, day, symbol, quantity,
+# price, gain, equity). Each is placed in whichever year is requested.
+SALES: list[tuple[str, int, int, str, str, str, str, bool]] = [
+    # Older lots still open: inferred long-term.
+    ("DEMO-TAXABLE", 2, 11, "VTI", "20", "281.10", "1840.55", True),
+    # Closed out entirely, so only the demo config can settle it.
+    ("DEMO-TAXABLE", 3, 4, "SPAC", "400", "9.80", "-612.00", True),
+    ("DEMO-TAXABLE", 3, 18, "EXITED", "50", "41.25", "905.10", True),
+    # The oldest open lot is too young to prove anything.
+    ("DEMO-TAXABLE", 5, 20, "MEME", "100", "3.40", "118.00", True),
+    # A coin: the trade history lists it alongside equities.
+    ("DEMO-TAXABLE", 6, 2, "BTC", "0.015", "64200", "212.40", False),
+    ("DEMO-IRA", 4, 9, "BND", "60", "72.10", "-44.70", True),
+]
+
+# Open lot acquisition dates, as whole years before the requested one plus a
+# month and day; zero years means earlier in the requested year itself.
+LOTS: Mapping[tuple[str, str], list[tuple[int, int, int]]] = {
+    ("DEMO-TAXABLE", "VTI"): [(4, 6, 12), (0, 1, 15)],
+    ("DEMO-TAXABLE", "MEME"): [(0, 1, 8)],
+    ("DEMO-TAXABLE", "SPAC"): [],
+    ("DEMO-TAXABLE", "EXITED"): [],
+}
+
+# Reinvested dividends, as (account, symbol, per-quarter payment).
+DIVIDENDS: list[tuple[str, str, str]] = [
+    ("DEMO-TAXABLE", "VTI", "312.40"),
+    ("DEMO-TAXABLE", "VXUS", "188.15"),
+    ("DEMO-TAXABLE", "BND", "41.02"),
+    ("DEMO-TAXABLE", "OLDCO", "22.50"),
+    ("DEMO-IRA", "VTI", "187.44"),
+    ("DEMO-IRA", "BND", "109.38"),
+]
+
+# What a user would put in income.yaml. OLDCO is left out on purpose, so the
+# demo shows an unclassified dividend.
+INCOME_CONFIG = IncomeConfig(
+    qualified_fractions={
+        "VTI": Decimal("0.95"), "VXUS": Decimal("0.70"), "BND": Decimal(0),
+    },
+    holding_periods={"SPAC": "short", "EXITED": "long"},
+)
+
+
+def _stamp(year: int, month: int, day: int, hour: int = 15) -> str:
+    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:30:00Z"
+
+
+class DemoIncomeSource:
+    """Stands in for RobinhoodClient, answering from the tables above."""
+
+    def __init__(self, year: int) -> None:
+        self.year = year
+
+    def connect(self) -> None:
+        pass
+
+    def get_accounts(self) -> JsonValue:
+        return demo_accounts()
+
+    def realized_trades(self, account_number: str, span: str) -> list[JsonObject]:
+        del span  # Every demo trade falls inside the requested year.
+        return [
+            {"timestamp": _stamp(self.year, month, day), "symbol": symbol,
+             "side": "sell", "quantity": quantity, "price": price,
+             "realized_gain": gain}
+            for account, month, day, symbol, quantity, price, gain, _ in SALES
+            if account == account_number
+        ]
+
+    def equity_orders(self, account_number: str, **filters: str) -> list[JsonObject]:
+        del filters
+        orders: list[JsonObject] = []
+        for account, month, day, symbol, quantity, price, _, equity in SALES:
+            if account == account_number and equity:
+                stamp = _stamp(self.year, month, day)
+                orders.append({
+                    "symbol": symbol, "side": "sell", "state": "filled",
+                    "placed_agent": "user", "quantity": quantity,
+                    "cumulative_quantity": quantity, "average_price": price,
+                    "created_at": stamp, "last_transaction_at": stamp,
+                    "executions": [{"timestamp": stamp, "quantity": quantity}],
+                })
+        for account, symbol, amount in DIVIDENDS:
+            if account != account_number:
+                continue
+            for month in (3, 6, 9, 12):
+                orders.append({
+                    "symbol": symbol, "side": "buy", "state": "filled",
+                    "placed_agent": "drip",
+                    "created_at": _stamp(self.year, month, 20, hour=2),
+                    "dollar_based_amount": {"amount": amount, "currency_code": "USD"},
+                })
+        return orders
+
+    def equity_tax_lots(self, account_number: str, symbol: str) -> list[JsonObject]:
+        return [
+            {"open_date": date(self.year - years, month, day).isoformat()}
+            for years, month, day in LOTS.get((account_number, symbol), [])
+        ]
+
+
+def build_demo_income(year: int) -> IncomeReport:
+    """The income report from invented records, through the live computation."""
+    return build_income_report(DemoIncomeSource(year), year, INCOME_CONFIG)

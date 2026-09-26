@@ -1,8 +1,9 @@
 # hood-normie
 
 A Python library that turns Robinhood's official Trading MCP server into an
-ordinary API, plus three examples built on it: an asset-allocation rebalancer, a
-local web app, and a handful of command-line tools.
+ordinary API, plus examples built on it: an asset-allocation rebalancer, a
+realized-income report for estimated taxes, a local web app, and a handful of
+command-line tools.
 
 The library speaks MCP at the transport layer, but `RobinhoodClient` exposes
 read-only portfolio methods and **nothing here places a trade**.
@@ -13,6 +14,7 @@ read-only portfolio methods and **nothing here places a trade**.
 | --- | --- |
 | `hood_normie/` | The library: transport, OAuth, and a normalized client |
 | `examples/rebalance/` | Asset-allocation rebalancing guidance |
+| `examples/income/` | Realized gains and dividends, split for estimated taxes |
 | `webapp/` | A local browser view over accounts, holdings, and the plan |
 | `examples/` | Command-line tools for authenticating and listing |
 | `hooks/` | Pre-commit hooks that keep secrets out of the repo |
@@ -25,7 +27,8 @@ data:
 - Streamable HTTP MCP transport and JSON-RPC tool calls.
 - OAuth 2.1 discovery, PKCE authentication, token storage, and refresh.
 - Account discovery, selection, and labeling.
-- Typed access to accounts, portfolios, equity positions, and quotes.
+- Typed access to accounts, portfolios, equity positions, and quotes, plus
+  paginated realized trades, equity orders, and open tax lots.
 - Normalization of Robinhood's response shapes into stable fields, including
   multi-account snapshots with a shared price map.
 
@@ -85,10 +88,28 @@ Ignored classes, fixed-dollar targets, margin cash targets, and the rest of the
 configuration are documented in
 [`examples/rebalance/README.md`](examples/rebalance/README.md).
 
+## Example: realized income for estimated taxes
+
+One year's realized gains and dividends per account, split the way an estimated
+tax payment needs them — short- versus long-term gains, qualified versus
+non-qualified dividends — without computing any tax:
+
+```sh
+bazel run //examples/income
+bazel run //examples/income -- --year 2025
+```
+
+Robinhood's MCP reports neither holding periods nor qualified status, and shows
+dividends only when they were reinvested, so the report infers what it safely
+can, marks the rest unknown, and takes the gaps from an optional `income.yaml`.
+Retirement accounts are listed but kept out of the taxable totals. How each
+bucket is filled is documented in
+[`examples/income/README.md`](examples/income/README.md).
+
 ## Example: local web app
 
-The same data in a browser — one tab each for accounts, holdings, and the
-rebalance plan, with sortable and searchable tables and CSV export:
+The same data in a browser — one tab each for accounts, holdings, the rebalance
+plan, and realized income, with sortable and searchable tables and CSV export:
 
 ```sh
 bazel run //webapp:server

@@ -1,0 +1,67 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load("@pip//:requirements.bzl", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "typecheck_sources",
+    srcs = glob(["*.py"]),
+)
+
+py_library(
+    name = "core",
+    srcs = ["__init__.py", "core.py"],
+    deps = [
+        "//hood_normie",
+        requirement("pyyaml"),
+    ],
+)
+
+py_library(
+    name = "report",
+    srcs = ["report.py"],
+    deps = [
+        ":core",
+        "//hood_normie",
+    ],
+)
+
+py_binary(
+    name = "income",
+    srcs = ["main.py"],
+    main = "main.py",
+    deps = [
+        ":core",
+        ":report",
+        "//examples:paths",
+        "//examples:terminal",
+        "//hood_normie",
+    ],
+)
+
+py_test(
+    name = "core_test",
+    srcs = ["core_test.py"],
+    data = ["income.example.yaml"],
+    deps = [":core"],
+)
+
+py_test(
+    name = "report_test",
+    srcs = ["report_test.py"],
+    deps = [
+        ":core",
+        ":report",
+        "//hood_normie",
+    ],
+)
+
+py_test(
+    name = "main_test",
+    srcs = ["main_test.py"],
+    deps = [
+        ":core",
+        ":income",
+        "//examples:terminal",
+    ],
+)

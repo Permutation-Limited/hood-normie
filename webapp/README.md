@@ -12,6 +12,7 @@ Each tab is one of the command-line tools:
 | Accounts | `/api/accounts` | `bazel run //examples:list_accounts` |
 | Holdings | `/api/holdings` | `bazel run //examples:list_holdings` |
 | Rebalance | `/api/rebalance` | `bazel run //examples/rebalance` |
+| Income | `/api/income` | `bazel run //examples/income` |
 
 It **does not place orders**. There is no endpoint that could.
 
@@ -25,8 +26,9 @@ Then open <http://127.0.0.1:8765>. The server builds the SPA as a dependency, so
 a plain `bazel run` is enough after a fresh checkout.
 
 Flags mirror the CLI: `--config PATH`, `--token-file PATH`, `--endpoint URL`,
-`--verbose`, plus `--port` (default `8765`) and `--static DIR` to serve a bundle
-from somewhere other than the Bazel output.
+`--verbose`, plus `--income-config PATH` (default `income.yaml` when it exists),
+`--port` (default `8765`), and `--static DIR` to serve a bundle from somewhere
+other than the Bazel output.
 
 Authentication is shared with the CLI — the same token file, created by:
 
@@ -88,6 +90,10 @@ The state lives in the URL, so a demo view is linkable, survives a reload, and
 follows you across navigation — a live URL can never be showing demo numbers or
 the reverse. Every demo response also carries `"demo": true`; CSV exports are
 named from that field, so a downloaded demo file says so in its filename.
+
+The Income tab's demo answers from invented trades, lots, and DRIP orders in
+`webapp/demo.py`, run through the live classification, so every bucket —
+including unknown terms and unclassified dividends — has something in it.
 
 A demo request reads `webapp/demo_config.yaml` and the invented snapshot in
 `webapp/demo.py`, whose `ACCOUNTS` records stand in for `get_accounts` on the
@@ -197,6 +203,42 @@ shown beneath them rather than to a separately reported broker figure.
 
 Unlike the CLI's `--json`, `amount` keeps its sign; `action` carries the same
 direction either way.
+
+`GET /api/income?year=2026` returns one year's realized gains and reinvested
+dividends per account; `year` defaults to the current one. `taxable_totals`
+leaves out tax-advantaged accounts. Each sale's `reason` says how its `term`
+(`short`, `long`, or `unknown`) was decided; see
+[`examples/income/README.md`](../examples/income/README.md).
+
+```json
+{
+  "generated_at": "2026-09-26T22:16:38.142662+00:00",
+  "demo": false,
+  "year": 2026,
+  "taxable_totals": {
+    "short_term": "0", "long_term": "383.45", "unknown_term": "0",
+    "realized": "383.45", "qualified": "85.01", "nonqualified": "15.00",
+    "unclassified": "0", "dividends": "100.01"
+  },
+  "accounts": [
+    {
+      "label": "individual · 111",
+      "account_number": "111",
+      "tax_advantaged": false,
+      "totals": {"...": "same fields as taxable_totals"},
+      "sales": [
+        {"date": "2026-07-15", "symbol": "CRBN", "quantity": "5.3481",
+         "price": "253.52", "gain": "383.45", "asset": "equity",
+         "term": "long", "reason": "older lot still open (FIFO)"}
+      ],
+      "dividends": [
+        {"symbol": "VT", "payments": 1, "paid": "100.01",
+         "qualified": "85.01", "nonqualified": "15.00", "unclassified": "0"}
+      ]
+    }
+  ]
+}
+```
 
 Errors return a JSON `error` field: `400` for a bad or missing config, `401` when
 the OAuth token needs refreshing, `502` when Robinhood is unreachable. Demo

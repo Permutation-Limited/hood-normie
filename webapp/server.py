@@ -1,8 +1,8 @@
 """Local web server for the hood-normie single-page app.
 
 Serves the Vite bundle as static files and exposes the rebalance report, the
-account list, and per-account holdings as JSON — the same three views the
-`//examples` command-line tools print.
+account list, per-account holdings, and a year's realized income as JSON — the
+same views the `//examples` command-line tools print.
 Read-only, like everything else in this repo: it computes and reports, and has no
 endpoint that could place an order.
 
@@ -22,15 +22,19 @@ import threading
 from typing import Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
+from examples.income.core import DEFAULT_CONFIG as DEFAULT_INCOME_CONFIG
+from examples.income.core import IncomeReport, load_optional_config
+from examples.income.report import build_income_report, today_eastern
 from examples.paths import workspace_path
 from examples.rebalance.report import DEFAULT_ENDPOINT, Report, build_report
 from hood_normie import RobinhoodClient
 from hood_normie.accounts import account_records
+from hood_normie.mcp import McpError
 from hood_normie.client import LabeledAccount
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 from hood_normie.types import JsonValue
 from webapp import demo as demo_data
-from webapp.api import accounts_json, holdings_json, report_json
+from webapp.api import accounts_json, holdings_json, income_json, report_json
 
 
 DEFAULT_PORT = 8765
@@ -41,6 +45,8 @@ ReportBuilder = Callable[[bool], Report]
 # The raw `get_accounts` payload; the handler parses it, exactly as the CLI does.
 AccountsBuilder = Callable[[bool], JsonValue]
 HoldingsBuilder = Callable[[bool], list[LabeledAccount]]
+# Takes the calendar year, or None for the current one.
+IncomeBuilder = Callable[[bool, int | None], IncomeReport]
 DEMO_VALUES = frozenset({"1", "true", "yes"})
 
 
@@ -48,6 +54,20 @@ def _is_demo(query: str) -> bool:
     """Demo mode is opt-in per request; anything unrecognized means live data."""
     values = parse_qs(query).get("demo", [])
     return bool(values) and values[-1].lower() in DEMO_VALUES
+
+
+def _year(query: str) -> int | None:
+    """The requested calendar year, or None for the current one."""
+    values = parse_qs(query).get("year", [])
+    if not values:
+        return None
+    try:
+        year = int(values[-1])
+    except ValueError:
+        raise ValueError(f"year must be a number, not {values[-1]!r}") from None
+    if year < 2000:
+        raise ValueError(f"no Robinhood history reaches back to {year}")
+    return year
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -60,6 +80,7 @@ class Handler(BaseHTTPRequestHandler):
     build: ReportBuilder
     build_accounts: AccountsBuilder
     build_holdings: HoldingsBuilder
+    build_income: IncomeBuilder
     # One live fetch at a time: concurrent refreshes would multiply Robinhood
     # requests for no benefit, since every caller wants the same snapshot.
     lock = threading.Lock()
@@ -78,6 +99,10 @@ class Handler(BaseHTTPRequestHandler):
             self.serve_fetch(
                 lambda: holdings_json(self.build_holdings(demo), demo=demo)
             )
+        elif parsed.path == "/api/income":
+            self.serve_fetch(lambda: income_json(
+                self.build_income(demo, _year(parsed.query)), demo=demo
+            ))
         elif parsed.path.startswith("/api/"):
             self.send_json({"error": f"unknown endpoint {parsed.path}"}, status=404)
         else:
@@ -107,6 +132,8 @@ class Handler(BaseHTTPRequestHandler):
             )
         except OSError as error:
             self.send_json({"error": f"could not reach Robinhood: {error}"}, status=502)
+        except McpError as error:
+            self.send_json({"error": str(error)}, status=502)
         else:
             self.send_json(payload)
 
@@ -160,12 +187,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def make_handler(static_root: str, build: ReportBuilder,
                  build_accounts: AccountsBuilder,
-                 build_holdings: HoldingsBuilder) -> type[Handler]:
+                 build_holdings: HoldingsBuilder,
+                 build_income: IncomeBuilder) -> type[Handler]:
     return type("BoundHandler", (Handler,), {
         "static_root": static_root,
         "build": staticmethod(build),
         "build_accounts": staticmethod(build_accounts),
         "build_holdings": staticmethod(build_holdings),
+        "build_income": staticmethod(build_income),
     })
 
 
@@ -184,6 +213,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--config", default=DEFAULT_CONFIG,
                         help=f"target allocation YAML (default: {DEFAULT_CONFIG})")
+    parser.add_argument("--income-config", default=None,
+                        help="income overrides YAML (default: income.yaml if it exists)")
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--static", default=None,
@@ -194,6 +225,11 @@ def main() -> int:
 
     config_path = workspace_path(args.config)
     token_file = workspace_path(args.token_file)
+    income_config = (workspace_path(args.income_config)
+                     if args.income_config else None)
+    if income_config and not os.path.isfile(income_config):
+        print(f"error: no income config at {income_config}", file=sys.stderr)
+        return 2
     static_root = args.static or default_static_root()
     if not os.path.isfile(os.path.join(static_root, INDEX)):
         print(f"error: no {INDEX} in {static_root}; build //webapp/frontend:dist first",
@@ -231,9 +267,19 @@ def main() -> int:
             return demo_data.demo_holdings()
         return client().fetch_holdings()
 
+    def build_income(demo: bool, year: int | None) -> IncomeReport:
+        if demo:
+            return demo_data.build_demo_income(year or today_eastern().year)
+        # Read per request, like config.yaml, so an edit shows on refresh.
+        return build_income_report(
+            client(), year or today_eastern().year,
+            load_optional_config(income_config,
+                                 workspace_path(DEFAULT_INCOME_CONFIG)),
+        )
+
     server = ThreadingHTTPServer(
         ("127.0.0.1", args.port),
-        make_handler(static_root, build, build_accounts, build_holdings),
+        make_handler(static_root, build, build_accounts, build_holdings, build_income),
     )
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"hood-normie serving {static_root}")

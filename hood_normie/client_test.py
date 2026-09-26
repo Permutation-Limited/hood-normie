@@ -1,7 +1,10 @@
 import unittest
 
-from hood_normie.accounts import account_label, account_summary
-from hood_normie.client import RobinhoodClient, normalize_account, normalize_quotes
+from hood_normie.accounts import account_label, account_summary, is_tax_advantaged
+from hood_normie.types import JsonObject
+from hood_normie.client import (
+    RobinhoodClient, collect_pages, normalize_account, normalize_quotes,
+)
 
 
 class FakeMcp:
@@ -131,6 +134,57 @@ class FetchHoldingsTest(unittest.TestCase):
         mcp.accounts = {"accounts": [{"nickname": "Unnumbered"}]}
         with self.assertRaises(ValueError):
             fake_client(mcp).fetch_holdings()
+
+
+class CollectPagesTest(unittest.TestCase):
+    def test_follows_either_cursor_name_until_it_empties(self):
+        pages = {
+            None: {"data": {"trades": [{"id": 1}], "next_cursor": "a"}},
+            "a": {"data": {"trades": [{"id": 2}], "next": "b"}},
+            "b": {"data": {"trades": [{"id": 3}], "next": ""}},
+        }
+        seen = []
+
+        def fetch(cursor):
+            seen.append(cursor)
+            return pages[cursor]
+
+        self.assertEqual(collect_pages(fetch, "trades"),
+                         [{"id": 1}, {"id": 2}, {"id": 3}])
+        self.assertEqual(seen, [None, "a", "b"])
+
+    def test_missing_list_is_an_error_naming_the_shape(self):
+        with self.assertRaises(ValueError) as caught:
+            collect_pages(lambda cursor: {"data": {"orders": "nope"}}, "orders")
+        self.assertIn("orders", str(caught.exception))
+
+    def test_a_cursor_that_never_ends_gives_up(self):
+        with self.assertRaises(ValueError):
+            collect_pages(lambda cursor: {"data": {"orders": [], "next": "again"}},
+                          "orders")
+
+
+class TaxAdvantagedTest(unittest.TestCase):
+    def test_recognizes_retirement_account_types(self):
+        accounts: list[JsonObject] = [
+            {"brokerage_account_type": "ira_roth"},
+            {"brokerage_account_type": "ira_traditional"},
+            {"retirement_account_type": "Roth IRA"},
+            {"taxStatus": "Traditional IRA"},
+        ]
+        for account in accounts:
+            with self.subTest(account=account):
+                self.assertTrue(is_tax_advantaged(account))
+
+    def test_ordinary_accounts_are_taxable(self):
+        accounts: list[JsonObject] = [
+            {"brokerage_account_type": "individual"},
+            {"brokerage_account_type": "trust_irrevocable"},
+            {"account_number": "111"},
+        ]
+        for account in accounts:
+            with self.subTest(account=account):
+                self.assertFalse(is_tax_advantaged(account))
 
 
 if __name__ == "__main__":

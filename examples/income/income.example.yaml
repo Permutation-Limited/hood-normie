@@ -1,0 +1,18 @@
+# Optional. Copy to income.yaml at the repository root and edit.
+#
+# Robinhood never reports whether a dividend is qualified. Give each symbol the
+# share of its dividends that is qualified: a fraction from 0 to 1, or the words
+# qualified / nonqualified. A fund's share is published with its year-end tax
+# information; bond funds and REITs are mostly non-qualified. Symbols missing
+# here are reported as unclassified rather than guessed.
+qualified_dividends:
+  VTI: 0.95
+  VXUS: 0.70
+  BND: nonqualified
+  AAPL: qualified
+
+# Holding periods for sales the tool cannot infer, typically a position closed
+# out entirely. Used only for sales whose term would otherwise be unknown; an
+# inferred term is never overridden. Values are short or long.
+holding_periods:
+  OLDCO: long

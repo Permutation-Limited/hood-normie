@@ -12,6 +12,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Mapping, Sequence, TypedDict
 
+from examples.income.core import (
+    AccountIncome, IncomeReport, IncomeTotals, dividends_by_symbol,
+)
 from examples.rebalance.core import Position, Recommendation
 from examples.rebalance.report import AccountHoldings, PortfolioReport, Report
 from hood_normie.accounts import AccountSummary, account_summary
@@ -220,4 +223,116 @@ def _recommendation_json(entry: Recommendation) -> RecommendationJson:
         "current_value": str(entry.current_value),
         "target_value": str(entry.target_value),
         "ignored": entry.ignored,
+    }
+
+
+class IncomeTotalsJson(TypedDict):
+    short_term: str
+    long_term: str
+    unknown_term: str
+    realized: str
+    qualified: str
+    nonqualified: str
+    unclassified: str
+    dividends: str
+
+
+class SaleJson(TypedDict):
+    date: str
+    symbol: str
+    quantity: str
+    price: str
+    gain: str
+    asset: str
+    term: str
+    reason: str
+
+
+class DividendJson(TypedDict):
+    symbol: str
+    payments: int
+    paid: str
+    qualified: str
+    nonqualified: str
+    unclassified: str
+
+
+class IncomeAccountJson(TypedDict):
+    label: str
+    account_number: str
+    tax_advantaged: bool
+    totals: IncomeTotalsJson
+    sales: list[SaleJson]
+    dividends: list[DividendJson]
+
+
+class IncomeJson(TypedDict):
+    generated_at: str
+    demo: bool
+    year: int
+    taxable_totals: IncomeTotalsJson
+    accounts: list[IncomeAccountJson]
+
+
+def income_json(report: IncomeReport, *, demo: bool = False,
+                generated_at: datetime | None = None) -> IncomeJson:
+    """Serialize a year's income, matching the //examples/income tables."""
+    moment = generated_at or datetime.now(timezone.utc)
+    return {
+        "generated_at": moment.isoformat(),
+        "demo": demo,
+        "year": report.year,
+        "taxable_totals": _income_totals_json(report.taxable_totals),
+        "accounts": [_income_account_json(account) for account in report.accounts],
+    }
+
+
+def _income_account_json(account: AccountIncome) -> IncomeAccountJson:
+    payments: dict[str, int] = {}
+    for item in account.dividends:
+        payments[item.symbol] = payments.get(item.symbol, 0) + 1
+    return {
+        "label": account.label,
+        "account_number": account.account_number,
+        "tax_advantaged": account.tax_advantaged,
+        "totals": _income_totals_json(account.totals),
+        "sales": [
+            {
+                "date": sale.when.isoformat(),
+                "symbol": sale.symbol,
+                # Without the trailing zeros crypto quantities arrive with, and
+                # never in exponent form, which normalize() alone would produce.
+                "quantity": format(sale.quantity.normalize(), "f"),
+                "price": str(sale.price),
+                "gain": str(sale.gain),
+                "asset": sale.asset,
+                "term": sale.term,
+                "reason": sale.reason,
+            }
+            for sale in account.sales
+        ],
+        "dividends": [
+            {
+                "symbol": symbol,
+                "payments": payments[symbol],
+                "paid": str(totals.dividends),
+                "qualified": str(totals.qualified),
+                "nonqualified": str(totals.nonqualified),
+                "unclassified": str(totals.unclassified),
+            }
+            for symbol, totals in dividends_by_symbol(account.dividends).items()
+        ],
+    }
+
+
+def _income_totals_json(totals: IncomeTotals) -> IncomeTotalsJson:
+    return {
+        "short_term": str(totals.short_term),
+        "long_term": str(totals.long_term),
+        "unknown_term": str(totals.unknown_term),
+        "realized": str(totals.realized),
+        "qualified": str(totals.qualified),
+        "nonqualified": str(totals.nonqualified),
+        "unclassified": str(totals.unclassified),
+        "dividends": str(totals.dividends),
     }

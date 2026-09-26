@@ -7,6 +7,7 @@ import Layout from "./components/Layout";
 import Accounts from "./routes/Accounts";
 import Holdings from "./routes/Holdings";
 import Home from "./routes/Home";
+import Income from "./routes/Income";
 import Rebalance from "./routes/Rebalance";
 
 /** Demo mode lives in the URL so a demo view is linkable and survives reload. */
@@ -47,11 +48,18 @@ const holdingsRoute = createRoute({
   component: Holdings,
 });
 
+const incomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/income",
+  component: Income,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   accountsRoute,
   holdingsRoute,
   rebalanceRoute,
+  incomeRoute,
 ]);
 
 export const router = createRouter({ routeTree });

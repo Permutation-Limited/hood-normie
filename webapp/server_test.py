@@ -14,16 +14,26 @@ from examples.rebalance.report import (
 )
 from hood_normie.accounts import account_records
 from hood_normie.client import LabeledAccount
+from hood_normie.mcp import McpError
 from hood_normie.oauth import OAuthError
 from hood_normie.types import JsonObject, JsonValue
 from webapp import demo
-from webapp.api import accounts_json, holdings_json, report_json
+from webapp.api import accounts_json, holdings_json, income_json, report_json
 from webapp.server import INDEX, make_handler
 
 
 def _ignore_demo(build):
     """Adapt a zero-argument fake builder to the handler's build(demo) contract."""
     return lambda demo: build()
+
+
+# Bound here because fake builders take a parameter named `demo`.
+build_demo_income = demo.build_demo_income
+
+
+def _demo_income(demo, year):
+    """An income builder that always answers with the invented report."""
+    return build_demo_income(year or 2026)
 
 
 SAMPLE_ACCOUNT_RECORDS: list[JsonObject] = [
@@ -138,6 +148,48 @@ class HoldingsJsonTest(unittest.TestCase):
         self.assertTrue(accounts_json([], demo=True)["demo"])
 
 
+class IncomeJsonTest(unittest.TestCase):
+    def test_demo_income_exercises_every_bucket(self):
+        payload = income_json(demo.build_demo_income(2026), demo=True)
+        self.assertEqual(payload["year"], 2026)
+        taxable, ira = payload["accounts"]
+        self.assertFalse(taxable["tax_advantaged"])
+        self.assertTrue(ira["tax_advantaged"])
+        terms = {sale["symbol"]: (sale["term"], sale["reason"])
+                 for sale in taxable["sales"]}
+        self.assertEqual(terms["VTI"][0], "long")
+        self.assertEqual(terms["SPAC"], ("short", "set in config"))
+        self.assertEqual(terms["EXITED"], ("long", "set in config"))
+        self.assertEqual(terms["MEME"][0], "unknown")
+        self.assertEqual(terms["BTC"], ("unknown", "crypto or options"))
+        totals = payload["taxable_totals"]
+        for bucket in ("short_term", "long_term", "unknown_term", "qualified",
+                       "nonqualified", "unclassified"):
+            with self.subTest(bucket=bucket):
+                self.assertNotEqual(Decimal(totals[bucket]), 0)
+
+    def test_dividends_are_grouped_by_symbol_as_exact_strings(self):
+        payload = income_json(demo.build_demo_income(2026))
+        vti = next(row for row in payload["accounts"][0]["dividends"]
+                   if row["symbol"] == "VTI")
+        self.assertEqual(vti["payments"], 4)
+        self.assertEqual(vti["paid"], "1249.60")
+        self.assertEqual(Decimal(vti["qualified"]) + Decimal(vti["nonqualified"]),
+                         Decimal(vti["paid"]))
+
+    def test_retirement_accounts_stay_out_of_taxable_totals(self):
+        payload = income_json(demo.build_demo_income(2026))
+        taxable = payload["accounts"][0]["totals"]
+        self.assertEqual(payload["taxable_totals"], taxable)
+
+    def test_quantities_have_no_exponent(self):
+        payload = income_json(demo.build_demo_income(2026))
+        quantities = [sale["quantity"] for account in payload["accounts"]
+                      for sale in account["sales"]]
+        self.assertIn("400", quantities)
+        self.assertTrue(all("E" not in value for value in quantities))
+
+
 class DemoTest(unittest.TestCase):
     def test_builds_a_report_without_network_or_token(self):
         report = demo.build_demo_report()
@@ -181,7 +233,7 @@ class DemoTest(unittest.TestCase):
 
 
 class ServerTest(unittest.TestCase):
-    def serve(self, build, accounts=None, holdings=None):
+    def serve(self, build, accounts=None, holdings=None, income=None):
         build = _ignore_demo(build)
         accounts = _ignore_demo(accounts or (lambda: SAMPLE_ACCOUNTS))
         holdings = _ignore_demo(holdings or (lambda: SAMPLE_HOLDINGS))
@@ -195,7 +247,8 @@ class ServerTest(unittest.TestCase):
         with open(os.path.join(root, "..", "outside.txt"), "w", encoding="utf-8") as s:
             s.write("secret")
         server = ThreadingHTTPServer(
-            ("127.0.0.1", 0), make_handler(root, build, accounts, holdings)
+            ("127.0.0.1", 0),
+            make_handler(root, build, accounts, holdings, income or _demo_income),
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -313,7 +366,7 @@ class ServerTest(unittest.TestCase):
         with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
             stream.write("<!doctype html><div id=root></div>")
         handler = make_handler(root, build, _ignore_demo(lambda: SAMPLE_ACCOUNTS),
-                               _ignore_demo(lambda: SAMPLE_HOLDINGS))
+                               _ignore_demo(lambda: SAMPLE_HOLDINGS), _demo_income)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -342,7 +395,8 @@ class ServerTest(unittest.TestCase):
         root = tempfile.mkdtemp()
         with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
             stream.write("<!doctype html><div id=root></div>")
-        handler = make_handler(root, _ignore_demo(sample_report), accounts, holdings)
+        handler = make_handler(root, _ignore_demo(sample_report), accounts, holdings,
+                               _demo_income)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -356,6 +410,40 @@ class ServerTest(unittest.TestCase):
                     _, body, _ = self.get(f"{base}/api/{path}{query}")
                     self.assertEqual(seen[-1], (path, expected))
                     self.assertEqual(json.loads(body)["demo"], expected)
+
+    def test_serves_income_for_the_requested_year(self):
+        seen: list[tuple[bool, int | None]] = []
+
+        def income(demo, year):
+            seen.append((demo, year))
+            return build_demo_income(year or 2026)
+
+        base = self.serve(sample_report, income=income)
+        _, body, _ = self.get(f"{base}/api/income?year=2025&demo=1")
+        payload = json.loads(body)
+        self.assertEqual(seen[-1], (True, 2025))
+        self.assertEqual(payload["year"], 2025)
+        self.assertTrue(payload["demo"])
+        self.get(f"{base}/api/income")
+        self.assertEqual(seen[-1], (False, None))
+
+    def test_bad_year_is_a_client_error(self):
+        base = self.serve(sample_report)
+        for query in ("year=next", "year=1999"):
+            with self.subTest(query=query):
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    self.get(f"{base}/api/income?{query}")
+                self.assertEqual(caught.exception.code, 400)
+
+    def test_robinhood_tool_errors_are_bad_gateway(self):
+        def income(demo, year):
+            raise McpError("Robinhood tool get_equity_orders failed")
+
+        base = self.serve(sample_report, income=income)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.get(f"{base}/api/income")
+        self.assertEqual(caught.exception.code, 502)
+        self.assertIn("get_equity_orders", json.loads(caught.exception.read())["error"])
 
     def test_unknown_api_endpoint_is_json_not_the_shell(self):
         base = self.serve(sample_report)
