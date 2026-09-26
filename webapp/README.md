@@ -206,7 +206,10 @@ direction either way.
 
 `GET /api/income?year=2026` returns one year's realized gains and reinvested
 dividends per account; `year` defaults to the current one. `taxable_totals`
-leaves out tax-advantaged accounts. Each sale's `reason` says how its `term`
+leaves out tax-advantaged accounts. `taxable_periods`, and each account's
+`periods`, split the same buckets by IRS estimated-tax period (Jan–Mar, Apr–May,
+Jun–Aug, Sep–Dec): `totals` is the period's own income and `cumulative` the year
+to date through its `end`, as Form 2210 Schedule AI asks. Each sale's `reason` says how its `term`
 (`short`, `long`, or `unknown`) was decided; see
 [`examples/income/README.md`](../examples/income/README.md).
 
@@ -220,12 +223,19 @@ leaves out tax-advantaged accounts. Each sale's `reason` says how its `term`
     "realized": "383.45", "qualified": "85.01", "nonqualified": "15.00",
     "unclassified": "0", "dividends": "100.01"
   },
+  "taxable_periods": [
+    {"number": 1, "label": "Jan 1–Mar 31", "start": "2026-01-01",
+     "end": "2026-03-31", "due": "2026-04-15",
+     "totals": {"...": "same fields as taxable_totals"},
+     "cumulative": {"...": "same fields as taxable_totals"}}
+  ],
   "accounts": [
     {
       "label": "individual · 111",
       "account_number": "111",
       "tax_advantaged": false,
       "totals": {"...": "same fields as taxable_totals"},
+      "periods": [{"...": "same shape as taxable_periods"}],
       "sales": [
         {"date": "2026-07-15", "symbol": "CRBN", "quantity": "5.3481",
          "price": "253.52", "gain": "383.45", "asset": "equity",

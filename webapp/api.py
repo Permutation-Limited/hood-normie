@@ -13,7 +13,8 @@ from decimal import Decimal
 from typing import Mapping, Sequence, TypedDict
 
 from examples.income.core import (
-    AccountIncome, IncomeReport, IncomeTotals, dividends_by_symbol,
+    AccountIncome, IncomeReport, IncomeTotals, cumulative, dividends_by_symbol,
+    estimated_tax_periods,
 )
 from examples.rebalance.core import Position, Recommendation
 from examples.rebalance.report import AccountHoldings, PortfolioReport, Report
@@ -257,11 +258,24 @@ class DividendJson(TypedDict):
     unclassified: str
 
 
+class TaxPeriodJson(TypedDict):
+    """One IRS estimated-tax period: its own income and the year to date."""
+
+    number: int
+    label: str
+    start: str
+    end: str
+    due: str
+    totals: IncomeTotalsJson
+    cumulative: IncomeTotalsJson
+
+
 class IncomeAccountJson(TypedDict):
     label: str
     account_number: str
     tax_advantaged: bool
     totals: IncomeTotalsJson
+    periods: list[TaxPeriodJson]
     sales: list[SaleJson]
     dividends: list[DividendJson]
 
@@ -271,6 +285,7 @@ class IncomeJson(TypedDict):
     demo: bool
     year: int
     taxable_totals: IncomeTotalsJson
+    taxable_periods: list[TaxPeriodJson]
     accounts: list[IncomeAccountJson]
 
 
@@ -283,11 +298,31 @@ def income_json(report: IncomeReport, *, demo: bool = False,
         "demo": demo,
         "year": report.year,
         "taxable_totals": _income_totals_json(report.taxable_totals),
-        "accounts": [_income_account_json(account) for account in report.accounts],
+        "taxable_periods": _periods_json(report.year, report.taxable_period_totals),
+        "accounts": [
+            _income_account_json(account, report.year) for account in report.accounts
+        ],
     }
 
 
-def _income_account_json(account: AccountIncome) -> IncomeAccountJson:
+def _periods_json(year: int, totals: list[IncomeTotals]) -> list[TaxPeriodJson]:
+    return [
+        {
+            "number": period.number,
+            "label": period.label,
+            "start": period.start.isoformat(),
+            "end": period.end.isoformat(),
+            "due": period.due.isoformat(),
+            "totals": _income_totals_json(own),
+            "cumulative": _income_totals_json(running),
+        }
+        for period, own, running in zip(
+            estimated_tax_periods(year), totals, cumulative(totals)
+        )
+    ]
+
+
+def _income_account_json(account: AccountIncome, year: int) -> IncomeAccountJson:
     payments: dict[str, int] = {}
     for item in account.dividends:
         payments[item.symbol] = payments.get(item.symbol, 0) + 1
@@ -296,6 +331,7 @@ def _income_account_json(account: AccountIncome) -> IncomeAccountJson:
         "account_number": account.account_number,
         "tax_advantaged": account.tax_advantaged,
         "totals": _income_totals_json(account.totals),
+        "periods": _periods_json(year, account.period_totals(year)),
         "sales": [
             {
                 "date": sale.when.isoformat(),

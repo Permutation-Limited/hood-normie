@@ -12,6 +12,7 @@ It computes no tax. Rates, brackets, and safe-harbor rules are left to you.
 bazel run //examples/income
 bazel run //examples/income -- --year 2025
 bazel run //examples/income -- --account ACCOUNT_NUMBER
+bazel run //examples/income -- --cumulative
 ```
 
 The web app's **Income** tab shows the same report, from the same code.
@@ -31,6 +32,27 @@ Long-term gains               $1,840.55
 Unknown-term gains             -$612.00
 ...
 ```
+
+## Estimated-tax periods
+
+Each taxable account, and the closing taxable summary, also breaks its buckets
+down by the IRS's estimated-tax periods. These are not calendar quarters:
+
+| Period | Due |
+| --- | --- |
+| Jan 1 – Mar 31 | Apr 15 |
+| Apr 1 – May 31 | Jun 15 |
+| Jun 1 – Aug 31 | Sep 15 |
+| Sep 1 – Dec 31 | Jan 15 of the next year |
+
+Due dates are nominal; one that falls on a weekend or holiday moves to the next
+business day. `--cumulative` shows each row as the year to date through the
+period's end (Mar 31, May 31, Aug 31, Dec 31), which is what Form 2210's
+annualized income installment method (Schedule AI) asks for. The web tab has
+the same switch.
+
+A sale belongs to the period of its trade date, and a dividend to the day it
+was reinvested, both in US Eastern time.
 
 Retirement accounts (IRAs and similar) are listed with plain totals and left out
 of the closing **TAXABLE ACCOUNTS** summary, since nothing in them is taxed as

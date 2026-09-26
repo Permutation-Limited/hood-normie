@@ -7,8 +7,9 @@ import unittest
 from examples.income.core import (
     CONFIGURED, INFERRED_LONG, NO_OLDER_LOT, NOT_EQUITY, TAX_ADVANTAGED,
     YOUNG_OLDEST_LOT, AccountIncome, Dividend, IncomeConfig, IncomeReport,
-    classify_sales, eastern_date, equity_sell_times, infer_term, is_long_term,
-    load_income_config, parse_income_config, reinvested_dividends,
+    Sale, classify_sales, cumulative, eastern_date, equity_sell_times,
+    estimated_tax_periods, infer_term, is_long_term, load_income_config,
+    parse_income_config, reinvested_dividends,
 )
 
 
@@ -157,8 +158,6 @@ class DividendsTest(unittest.TestCase):
 
 class TotalsTest(unittest.TestCase):
     def test_taxable_totals_leave_out_retirement_accounts(self):
-        from examples.income.core import Sale
-
         def account(tax_advantaged: bool) -> AccountIncome:
             return AccountIncome(
                 label="x", account_number="1", tax_advantaged=tax_advantaged,
@@ -177,6 +176,47 @@ class TotalsTest(unittest.TestCase):
         self.assertEqual(totals.qualified, Decimal("2.00"))
         self.assertEqual(totals.nonqualified, Decimal("2.00"))
         self.assertEqual(totals.realized, Decimal("9"))
+
+
+class EstimatedTaxPeriodTest(unittest.TestCase):
+    def test_periods_follow_the_irs_not_the_calendar(self):
+        periods = estimated_tax_periods(2026)
+        self.assertEqual([(p.start, p.end, p.due) for p in periods], [
+            (date(2026, 1, 1), date(2026, 3, 31), date(2026, 4, 15)),
+            (date(2026, 4, 1), date(2026, 5, 31), date(2026, 6, 15)),
+            (date(2026, 6, 1), date(2026, 8, 31), date(2026, 9, 15)),
+            (date(2026, 9, 1), date(2026, 12, 31), date(2027, 1, 15)),
+        ])
+        self.assertEqual(periods[1].label, "Apr 1–May 31")
+
+    def account(self, tax_advantaged: bool = False) -> AccountIncome:
+        def sale(when: date, gain: str) -> Sale:
+            return Sale(when, "VT", Decimal(1), Decimal(1), Decimal(gain),
+                        "equity", "long", INFERRED_LONG)
+
+        return AccountIncome(
+            label="x", account_number="1", tax_advantaged=tax_advantaged,
+            sales=(sale(date(2026, 5, 31), "1"), sale(date(2026, 6, 1), "10"),
+                   sale(date(2026, 8, 31), "100"), sale(date(2026, 9, 1), "1000")),
+            dividends=(Dividend(date(2026, 3, 31), "VT", Decimal("5"), None),),
+        )
+
+    def test_boundary_days_land_in_the_right_period(self):
+        periods = self.account().period_totals(2026)
+        self.assertEqual([p.long_term for p in periods],
+                         [Decimal(0), Decimal(1), Decimal(110), Decimal(1000)])
+        self.assertEqual(periods[0].unclassified, Decimal(5))
+
+    def test_cumulative_runs_through_each_period_end(self):
+        running = cumulative(self.account().period_totals(2026))
+        self.assertEqual([p.long_term for p in running],
+                         [Decimal(0), Decimal(1), Decimal(111), Decimal(1111)])
+        self.assertEqual(running[-1], self.account().totals)
+
+    def test_taxable_periods_leave_out_retirement_accounts(self):
+        report = IncomeReport(2026, (self.account(), self.account(True)))
+        self.assertEqual(report.taxable_period_totals,
+                         self.account().period_totals(2026))
 
 
 class ConfigTest(unittest.TestCase):

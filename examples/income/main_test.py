@@ -5,7 +5,7 @@ import unittest
 from contextlib import redirect_stdout
 
 from examples.income.core import (
-    INFERRED_LONG, NOT_EQUITY, AccountIncome, Dividend, IncomeTotals, Sale,
+    INFERRED_LONG, NOT_EQUITY, AccountIncome, Dividend, IncomeReport, Sale,
 )
 from examples.income.main import print_account, print_taxable_totals
 from examples.terminal import Style
@@ -81,9 +81,37 @@ class PrintAccountTest(unittest.TestCase):
     def test_taxable_total_points_at_config_when_something_is_unknown(self):
         output = io.StringIO()
         with redirect_stdout(output):
-            print_taxable_totals(IncomeTotals(unclassified=Decimal(1)), 2026,
-                                 Style(False))
+            print_taxable_totals(IncomeReport(2026, (ACCOUNT,)), Style(False))
         self.assertIn("income.yaml", output.getvalue())
+
+    def test_splits_by_irs_estimated_tax_period(self):
+        rows = self.period_rows(cumulative=False)
+        # Jan–Mar: the March VT dividend. Apr–May: nothing. Jun–Aug: CRBN
+        # and the June dividends. Sep–Dec: the ADA sale.
+        self.assertEqual(list(rows), ["Jan 1–Mar 31", "Apr 1–May 31",
+                                      "Jun 1–Aug 31", "Sep 1–Dec 31"])
+        self.assertIn("2026-04-15", rows["Jan 1–Mar 31"])
+        self.assertIn("$90.00", rows["Jan 1–Mar 31"])
+        self.assertNotIn("$383.45", rows["Jan 1–Mar 31"])
+        self.assertIn("$383.45", rows["Jun 1–Aug 31"])
+        self.assertIn("$45.00", rows["Jun 1–Aug 31"])
+        self.assertIn("$20.00", rows["Jun 1–Aug 31"])
+        self.assertIn("2027-01-15", rows["Sep 1–Dec 31"])
+        self.assertIn("-$0.01", rows["Sep 1–Dec 31"])
+
+    def test_cumulative_periods_run_year_to_date(self):
+        rows = self.period_rows(cumulative=True)
+        self.assertIn("$90.00", rows["Apr 1–May 31"])
+        self.assertIn("$135.00", rows["Sep 1–Dec 31"])
+        self.assertIn("$383.45", rows["Sep 1–Dec 31"])
+
+    def period_rows(self, cumulative: bool) -> dict[str, str]:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            print_account(ACCOUNT, 2026, cumulative=cumulative)
+        lines = output.getvalue().splitlines()
+        return {line[:13].strip(): line for line in lines
+                if line[:3] in ("Jan", "Apr", "Jun", "Sep")}
 
 
 if __name__ == "__main__":

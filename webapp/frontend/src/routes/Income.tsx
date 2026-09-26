@@ -11,6 +11,7 @@ import type { IncomeAccount } from "../api";
 import { fetchIncome } from "../api";
 import DividendsTable from "../components/DividendsTable";
 import IncomeSummary from "../components/IncomeSummary";
+import PeriodsTable from "../components/PeriodsTable";
 import ReportPage from "../components/ReportPage";
 import SalesTable from "../components/SalesTable";
 import { useLiveQuery } from "../useLiveQuery";
@@ -50,6 +51,14 @@ function AccountSection({
           totals={account.totals}
           taxAdvantaged={account.tax_advantaged}
         />
+        {!account.tax_advantaged &&
+          (account.sales.length > 0 || account.dividends.length > 0) && (
+          <PeriodsTable
+            periods={account.periods}
+            account={account.label}
+            demo={demo}
+          />
+        )}
         <Divider sx={{ my: 2 }} />
         <SalesTable
           sales={account.sales}
@@ -132,6 +141,11 @@ export default function Income(): ReactElement {
                 Taxable accounts
               </Typography>
               <IncomeSummary totals={current.taxable_totals} />
+              <PeriodsTable
+                periods={current.taxable_periods}
+                account="taxable"
+                demo={current.demo}
+              />
             </CardContent>
           </Card>
           {current.accounts.map((account) => (

@@ -100,6 +100,21 @@ export interface IncomeTotals {
   dividends: string;
 }
 
+/**
+ * One IRS estimated-tax period — Jan–Mar, Apr–May, Jun–Aug, Sep–Dec, not
+ * calendar quarters — with its own income and the year to date through its end.
+ */
+export interface TaxPeriod {
+  number: number;
+  label: string;
+  start: string;
+  end: string;
+  /** Nominal due date; a weekend or holiday moves it to the next business day. */
+  due: string;
+  totals: IncomeTotals;
+  cumulative: IncomeTotals;
+}
+
 export type Term = "short" | "long" | "unknown";
 
 /** One closing trade from Robinhood's realized P&L history. */
@@ -130,6 +145,7 @@ export interface IncomeAccount {
   account_number: string;
   tax_advantaged: boolean;
   totals: IncomeTotals;
+  periods: TaxPeriod[];
   sales: Sale[];
   dividends: DividendSummary[];
 }
@@ -140,6 +156,7 @@ export interface IncomeReport {
   demo: boolean;
   year: number;
   taxable_totals: IncomeTotals;
+  taxable_periods: TaxPeriod[];
   accounts: IncomeAccount[];
 }
 

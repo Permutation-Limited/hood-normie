@@ -182,6 +182,19 @@ class IncomeJsonTest(unittest.TestCase):
         taxable = payload["accounts"][0]["totals"]
         self.assertEqual(payload["taxable_totals"], taxable)
 
+    def test_periods_split_the_year_and_accumulate(self):
+        payload = income_json(demo.build_demo_income(2026))
+        periods = payload["taxable_periods"]
+        self.assertEqual([p["label"] for p in periods],
+                         ["Jan 1–Mar 31", "Apr 1–May 31", "Jun 1–Aug 31",
+                          "Sep 1–Dec 31"])
+        self.assertEqual(periods[3]["due"], "2027-01-15")
+        realized = sum(Decimal(p["totals"]["realized"]) for p in periods)
+        self.assertEqual(realized, Decimal(payload["taxable_totals"]["realized"]))
+        self.assertEqual(periods[-1]["cumulative"], payload["taxable_totals"])
+        self.assertEqual(periods[0]["cumulative"], periods[0]["totals"])
+        self.assertEqual(payload["accounts"][0]["periods"], periods)
+
     def test_quantities_have_no_exponent(self):
         payload = income_json(demo.build_demo_income(2026))
         quantities = [sale["quantity"] for account in payload["accounts"]

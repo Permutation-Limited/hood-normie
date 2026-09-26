@@ -10,8 +10,8 @@ import os
 import sys
 
 from examples.income.core import (
-    DEFAULT_CONFIG, AccountIncome, IncomeTotals, dividends_by_symbol,
-    load_optional_config,
+    DEFAULT_CONFIG, AccountIncome, IncomeReport, IncomeTotals, cumulative,
+    dividends_by_symbol, estimated_tax_periods, load_optional_config,
 )
 from examples.income.report import build_income_report, today_eastern
 from examples.paths import workspace_path
@@ -31,6 +31,11 @@ def main() -> int:
         "--config", default=None,
         help="qualified-dividend and holding-period overrides "
              f"(default: {DEFAULT_CONFIG} if it exists)",
+    )
+    parser.add_argument(
+        "--cumulative", action="store_true",
+        help="show each estimated-tax period as year-to-date through its end, "
+             "as Form 2210 Schedule AI asks",
     )
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE,
@@ -59,13 +64,14 @@ def main() -> int:
     )
 
     for account in report.accounts:
-        print_account(account, report.year, style)
+        print_account(account, report.year, style, cumulative=args.cumulative)
         print()
-    print_taxable_totals(report.taxable_totals, report.year, style)
+    print_taxable_totals(report, style, cumulative=args.cumulative)
     return 0
 
 
-def print_account(account: AccountIncome, year: int, style: Style | None = None) -> None:
+def print_account(account: AccountIncome, year: int, style: Style | None = None,
+                  *, cumulative: bool = False) -> None:
     style = style or Style(False)
     heading = f"◆ INCOME {year} — {account.label}"
     print(style.apply(heading, style.BOLD, style.CYAN))
@@ -119,6 +125,8 @@ def print_account(account: AccountIncome, year: int, style: Style | None = None)
         print(f"{'Dividends':<24} {_money(account.totals.dividends):>14}")
     else:
         print_summary(account.totals, style)
+        if account.sales or account.dividends:
+            print_periods(account.period_totals(year), year, style, cumulative)
 
 
 def print_summary(totals: IncomeTotals, style: Style) -> None:
@@ -136,9 +144,37 @@ def print_summary(totals: IncomeTotals, style: Style) -> None:
         print(style.apply(line, style.YELLOW) if needs_attention and value else line)
 
 
-def print_taxable_totals(totals: IncomeTotals, year: int, style: Style) -> None:
-    print(style.apply(f"◆ TAXABLE ACCOUNTS {year}", style.BOLD, style.CYAN))
+def print_periods(periods: list[IncomeTotals], year: int, style: Style,
+                  cumulative_view: bool = False) -> None:
+    """One row per IRS estimated-tax period: Jan–Mar, Apr–May, Jun–Aug, Sep–Dec."""
+    rows = cumulative(periods) if cumulative_view else periods
+    title = ("BY ESTIMATED-TAX PERIOD (year to date through each period's end)"
+             if cumulative_view else "BY ESTIMATED-TAX PERIOD")
+    print(style.apply(title, style.BOLD))
+    print(style.apply(
+        f"{'PERIOD':<13} {'DUE':<10} {'SHORT':>11} {'LONG':>11} {'UNKNOWN':>11} "
+        f"{'QUALIFIED':>11} {'NON-QUAL':>11} {'UNCLASS.':>11}", style.DIM,
+    ))
+    for period, totals in zip(estimated_tax_periods(year), rows):
+        unresolved = (
+            f"{_money(totals.unknown_term):>11} ",
+            f"{_money(totals.unclassified):>11}",
+        )
+        print(
+            f"{period.label:<13} {period.due.isoformat():<10} "
+            f"{_money(totals.short_term):>11} {_money(totals.long_term):>11} "
+            + style.apply(unresolved[0], style.YELLOW if totals.unknown_term else "")
+            + f"{_money(totals.qualified):>11} {_money(totals.nonqualified):>11} "
+            + style.apply(unresolved[1], style.YELLOW if totals.unclassified else "")
+        )
+
+
+def print_taxable_totals(report: IncomeReport, style: Style,
+                         *, cumulative: bool = False) -> None:
+    totals = report.taxable_totals
+    print(style.apply(f"◆ TAXABLE ACCOUNTS {report.year}", style.BOLD, style.CYAN))
     print_summary(totals, style)
+    print_periods(report.taxable_period_totals, report.year, style, cumulative)
     if totals.unknown_term or totals.unclassified:
         print(style.apply(
             "Unknown and unclassified amounts need a holding period or qualified "

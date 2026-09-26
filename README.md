@@ -102,7 +102,9 @@ bazel run //examples/income -- --year 2025
 Robinhood's MCP reports neither holding periods nor qualified status, and shows
 dividends only when they were reinvested, so the report infers what it safely
 can, marks the rest unknown, and takes the gaps from an optional `income.yaml`.
-Retirement accounts are listed but kept out of the taxable totals. How each
+Each taxable account is also split by the IRS's estimated-tax periods (Jan–Mar,
+Apr–May, Jun–Aug, Sep–Dec), per period or year to date for the annualized
+method. Retirement accounts are listed but kept out of the taxable totals. How each
 bucket is filled is documented in
 [`examples/income/README.md`](examples/income/README.md).
 

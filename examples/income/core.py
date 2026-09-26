@@ -160,17 +160,18 @@ class AccountIncome:
 
     @property
     def totals(self) -> IncomeTotals:
-        by_term = {term: Decimal(0) for term in TERMS}
-        for sale in self.sales:
-            by_term[sale.term] += sale.gain
-        return IncomeTotals(
-            short_term=by_term["short"],
-            long_term=by_term["long"],
-            unknown_term=by_term["unknown"],
-            qualified=sum((item.qualified for item in self.dividends), Decimal(0)),
-            nonqualified=sum((item.nonqualified for item in self.dividends), Decimal(0)),
-            unclassified=sum((item.unclassified for item in self.dividends), Decimal(0)),
-        )
+        return income_totals(self.sales, self.dividends)
+
+    def period_totals(self, year: int) -> list[IncomeTotals]:
+        """Totals for each estimated-tax period of the year, in order."""
+        return [
+            income_totals(
+                [sale for sale in self.sales if period.start <= sale.when <= period.end],
+                [item for item in self.dividends
+                 if period.start <= item.when <= period.end],
+            )
+            for period in estimated_tax_periods(year)
+        ]
 
 
 @dataclass(frozen=True)
@@ -179,12 +180,79 @@ class IncomeReport:
     accounts: tuple[AccountIncome, ...]
 
     @property
+    def taxable(self) -> tuple[AccountIncome, ...]:
+        """Accounts whose income is taxed this year; retirement income is not."""
+        return tuple(item for item in self.accounts if not item.tax_advantaged)
+
+    @property
     def taxable_totals(self) -> IncomeTotals:
-        """Totals over taxable accounts only; retirement income is not taxed yet."""
-        return sum(
-            (item.totals for item in self.accounts if not item.tax_advantaged),
-            IncomeTotals(),
-        )
+        return sum((item.totals for item in self.taxable), IncomeTotals())
+
+    @property
+    def taxable_period_totals(self) -> list[IncomeTotals]:
+        periods = [IncomeTotals() for _ in estimated_tax_periods(self.year)]
+        for account in self.taxable:
+            periods = [
+                total + part
+                for total, part in zip(periods, account.period_totals(self.year))
+            ]
+        return periods
+
+
+@dataclass(frozen=True)
+class TaxPeriod:
+    """One estimated-tax payment period, as the IRS defines them.
+
+    They are not calendar quarters: two months, then three, then four. Form
+    2210's annualized method (Schedule AI) asks for income through each end
+    date, so the cumulative sums matter as much as each period's own.
+    """
+
+    number: int
+    start: date
+    end: date
+    # The nominal due date; a weekend or holiday moves it to the next business day.
+    due: date
+
+    @property
+    def label(self) -> str:
+        return f"{self.start:%b} {self.start.day}–{self.end:%b} {self.end.day}"
+
+
+def estimated_tax_periods(year: int) -> tuple[TaxPeriod, ...]:
+    return (
+        TaxPeriod(1, date(year, 1, 1), date(year, 3, 31), date(year, 4, 15)),
+        TaxPeriod(2, date(year, 4, 1), date(year, 5, 31), date(year, 6, 15)),
+        TaxPeriod(3, date(year, 6, 1), date(year, 8, 31), date(year, 9, 15)),
+        TaxPeriod(4, date(year, 9, 1), date(year, 12, 31), date(year + 1, 1, 15)),
+    )
+
+
+def cumulative(periods: Iterable[IncomeTotals]) -> list[IncomeTotals]:
+    """Running totals through the end of each period."""
+    running = IncomeTotals()
+    result: list[IncomeTotals] = []
+    for period in periods:
+        running = running + period
+        result.append(running)
+    return result
+
+
+def income_totals(
+    sales: Iterable[Sale], dividends: Iterable[Dividend]
+) -> IncomeTotals:
+    by_term = {term: Decimal(0) for term in TERMS}
+    for sale in sales:
+        by_term[sale.term] += sale.gain
+    paid = list(dividends)
+    return IncomeTotals(
+        short_term=by_term["short"],
+        long_term=by_term["long"],
+        unknown_term=by_term["unknown"],
+        qualified=sum((item.qualified for item in paid), Decimal(0)),
+        nonqualified=sum((item.nonqualified for item in paid), Decimal(0)),
+        unclassified=sum((item.unclassified for item in paid), Decimal(0)),
+    )
 
 
 def dividends_by_symbol(dividends: Iterable[Dividend]) -> dict[str, IncomeTotals]:
