@@ -3,16 +3,20 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Container from "@mui/material/Container";
 import IconButton from "@mui/material/IconButton";
+import MuiLink from "@mui/material/Link";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import GitHubIcon from "@mui/icons-material/GitHub";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useRouterState, useSearch } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import DemoChip from "./DemoChip";
+
+const REPOSITORY = "https://github.com/Permutation-Limited/hood-normie";
 
 const NAV = [
   { label: "Home", to: "/" },
@@ -98,6 +102,40 @@ export default function Layout(): ReactElement {
       <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1 }}>
         <Outlet />
       </Container>
+      <Box
+        component="footer"
+        sx={{ borderTop: 1, borderColor: "divider", py: 2 }}
+      >
+        <Container maxWidth="lg">
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              columnGap: 2,
+              rowGap: 0.5,
+              flexWrap: "wrap",
+            }}
+          >
+            <span>
+              © 2026 Permutation Limited · Not affiliated with or endorsed by
+              Robinhood Markets, Inc.
+            </span>
+            {/* Pushed to the far end, and onto its own line when narrow. */}
+            <MuiLink
+              href={REPOSITORY}
+              target="_blank"
+              rel="noopener noreferrer"
+              color="inherit"
+              sx={{ display: "inline-flex", alignItems: "center", gap: 1, ml: "auto" }}
+            >
+              <GitHubIcon fontSize="small" aria-hidden />
+              Permutation-Limited/hood-normie
+            </MuiLink>
+          </Typography>
+        </Container>
+      </Box>
     </Box>
   );
 }

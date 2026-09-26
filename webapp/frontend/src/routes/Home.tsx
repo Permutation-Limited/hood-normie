@@ -43,8 +43,8 @@ const VIEWS = [
     cta: "Open income",
     command: "bazel run //examples/income",
     description:
-      "A year's realized gains split short- and long-term, and reinvested " +
-      "dividends split qualified and non-qualified, per account — the inputs to " +
+      "A year's realized gains split short- and long-term, and dividends " +
+      "split qualified and non-qualified, per account — the inputs to " +
       "an estimated tax payment, without the estimate.",
   },
 ] as const;
