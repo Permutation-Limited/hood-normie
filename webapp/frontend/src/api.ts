@@ -277,3 +277,52 @@ export async function fetchIncome(
 ): Promise<IncomeReport> {
   return get<IncomeReport>("/api/income", options, { year: String(year) });
 }
+
+/** Totals over holdings with both a price and a cost basis. */
+export interface UnrealizedTotals {
+  market_value: string;
+  cost_basis: string;
+  unrealized: string;
+  /** Unrealized gain as a fraction of cost; null without a positive cost. */
+  return_rate: string | null;
+  /** Holdings left out of the sums for want of a price or basis. */
+  incomplete: number;
+}
+
+export type BasisSource = "tax lots" | "average cost" | "unavailable";
+
+export interface UnrealizedHolding {
+  symbol: string;
+  quantity: string;
+  price: string | null;
+  market_value: string | null;
+  cost_basis: string | null;
+  unrealized: string | null;
+  return_rate: string | null;
+  /** "tax lots" unless a lot's basis is pending; then Robinhood's average cost. */
+  basis_source: BasisSource;
+}
+
+export interface UnrealizedAccount {
+  label: string;
+  account_number: string;
+  tax_advantaged: boolean;
+  totals: UnrealizedTotals;
+  holdings: UnrealizedHolding[];
+}
+
+/** Unrealized gains, mirroring `//examples/unrealized`. */
+export interface UnrealizedReport {
+  generated_at: string;
+  demo: boolean;
+  taxable_totals: UnrealizedTotals;
+  /** Taxable holdings merged by symbol across accounts. */
+  combined: UnrealizedHolding[];
+  accounts: UnrealizedAccount[];
+}
+
+export async function fetchUnrealized(
+  options: FetchOptions = {},
+): Promise<UnrealizedReport> {
+  return get<UnrealizedReport>("/api/unrealized", options);
+}

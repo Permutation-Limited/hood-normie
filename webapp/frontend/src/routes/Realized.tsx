@@ -12,6 +12,7 @@ import { fetchIncome } from "../api";
 import DividendsTable from "../components/DividendsTable";
 import IncomeSummary from "../components/IncomeSummary";
 import PeriodsTable from "../components/PeriodsTable";
+import PerformanceTabs from "../components/PerformanceTabs";
 import ReportPage from "../components/ReportPage";
 import SalesTable from "../components/SalesTable";
 import TreatmentSummary from "../components/TreatmentSummary";
@@ -79,7 +80,8 @@ function AccountSection({
   );
 }
 
-export default function Income(): ReactElement {
+/** The Performance tab's realized view: a year's gains and dividends. */
+export default function Realized(): ReactElement {
   const [year, setYear] = useState<number>(THIS_YEAR);
   const { data, error, isFetching, isDemo } = useLiveQuery(
     `income-${String(year)}`,
@@ -90,7 +92,8 @@ export default function Income(): ReactElement {
 
   return (
     <ReportPage
-      title="Income"
+      title="Performance"
+      header={<PerformanceTabs />}
       subtitle={
         current
           ? `Fetched ${new Date(current.generated_at).toLocaleString()}`
@@ -113,7 +116,7 @@ export default function Income(): ReactElement {
       hasData={Boolean(current)}
       loadingMessage={
         isDemo
-          ? "Building the demo income…"
+          ? "Building the demo performance…"
           : "Fetching trades, orders, tax lots, and price history from Robinhood…"
       }
     >

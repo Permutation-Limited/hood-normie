@@ -12,7 +12,8 @@ Each tab is one of the command-line tools:
 | Accounts | `/api/accounts` | `bazel run //examples:list_accounts` |
 | Holdings | `/api/holdings` | `bazel run //examples:list_holdings` |
 | Rebalance | `/api/rebalance` | `bazel run //examples/rebalance` |
-| Income | `/api/income` | `bazel run //examples/income` |
+| Performance › Realized & income | `/api/income` | `bazel run //examples/income` |
+| Performance › Unrealized | `/api/unrealized` | `bazel run //examples/unrealized` |
 
 It **does not place orders**. There is no endpoint that could.
 
@@ -91,7 +92,7 @@ follows you across navigation — a live URL can never be showing demo numbers o
 the reverse. Every demo response also carries `"demo": true`; CSV exports are
 named from that field, so a downloaded demo file says so in its filename.
 
-The Income tab's demo answers from invented trades, lots, and DRIP orders in
+The Performance tab's demo answers from invented trades, lots, and DRIP orders in
 `webapp/demo.py`, run through the live classification, so every bucket —
 including unknown terms and unclassified dividends — has something in it.
 
@@ -213,6 +214,9 @@ to date through its `end`, as Form 2210 Schedule AI asks. Each sale's `reason` s
 (`short`, `long`, or `unknown`) was decided; see
 [`examples/income/README.md`](../examples/income/README.md).
 
+The Performance tab lives at `/performance` and `/performance/unrealized`; the
+old `/income` address redirects to it.
+
 ```json
 {
   "generated_at": "2026-09-26T22:16:38.142662+00:00",
@@ -246,6 +250,34 @@ to date through its `end`, as Form 2210 Schedule AI asks. Each sale's `reason` s
          "qualified": "85.01", "nonqualified": "15.00", "unclassified": "0"}
       ]
     }
+  ]
+}
+```
+
+`GET /api/unrealized` marks each account's equity positions at the latest
+quote against the cost basis of their open tax lots. `combined` merges the
+taxable accounts' holdings by symbol, and `taxable_totals` sums them; retirement
+accounts appear under `accounts` only. A holding's `basis_source` is `tax lots`,
+or `average cost` when a lot's basis is still pending. Fields are `null` where a
+price or basis is missing, and `incomplete` counts those holdings, which the
+totals leave out.
+
+```json
+{
+  "generated_at": "2026-10-08T23:57:37.000000+00:00",
+  "demo": false,
+  "taxable_totals": {"market_value": "1587.35", "cost_basis": "1000",
+                     "unrealized": "587.35", "return_rate": "0.58735",
+                     "incomplete": 0},
+  "combined": [
+    {"symbol": "VT", "quantity": "10", "price": "158.735",
+     "market_value": "1587.35", "cost_basis": "1000", "unrealized": "587.35",
+     "return_rate": "0.58735", "basis_source": "tax lots"}
+  ],
+  "accounts": [
+    {"label": "individual · 111", "account_number": "111",
+     "tax_advantaged": false, "totals": {"...": "as taxable_totals"},
+     "holdings": [{"...": "as combined"}]}
   ]
 }
 ```

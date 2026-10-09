@@ -18,7 +18,9 @@ from hood_normie.mcp import McpError
 from hood_normie.oauth import OAuthError
 from hood_normie.types import JsonObject, JsonValue
 from webapp import demo
-from webapp.api import accounts_json, holdings_json, income_json, report_json
+from webapp.api import (
+    accounts_json, holdings_json, income_json, report_json, unrealized_json,
+)
 from webapp.server import INDEX, make_handler
 
 
@@ -34,6 +36,13 @@ build_demo_income = demo.build_demo_income
 def _demo_income(demo, year):
     """An income builder that always answers with the invented report."""
     return build_demo_income(year or 2026)
+
+
+def _demo_unrealized(demo):
+    return build_demo_unrealized()
+
+
+build_demo_unrealized = demo.build_demo_unrealized
 
 
 SAMPLE_ACCOUNT_RECORDS: list[JsonObject] = [
@@ -231,6 +240,28 @@ class IncomeJsonTest(unittest.TestCase):
         self.assertTrue(all("E" not in value for value in quantities))
 
 
+class UnrealizedJsonTest(unittest.TestCase):
+    def test_demo_holdings_are_marked_against_their_basis(self):
+        payload = unrealized_json(demo.build_demo_unrealized(), demo=True)
+        self.assertTrue(payload["demo"])
+        taxable, ira = payload["accounts"]
+        self.assertFalse(taxable["tax_advantaged"])
+        vti = next(item for item in taxable["holdings"] if item["symbol"] == "VTI")
+        self.assertEqual(vti["market_value"], "85650.00")
+        self.assertEqual(vti["cost_basis"], "63720.00")
+        self.assertEqual(vti["unrealized"], "21930.00")
+        self.assertEqual(vti["basis_source"], "tax lots")
+        meme = next(item for item in taxable["holdings"] if item["symbol"] == "MEME")
+        self.assertEqual(meme["basis_source"], "average cost")
+
+    def test_combined_covers_only_taxable_accounts(self):
+        payload = unrealized_json(demo.build_demo_unrealized())
+        self.assertEqual(payload["taxable_totals"],
+                         payload["accounts"][0]["totals"])
+        self.assertEqual({item["symbol"] for item in payload["combined"]},
+                         {item["symbol"] for item in payload["accounts"][0]["holdings"]})
+
+
 class DemoTest(unittest.TestCase):
     def test_builds_a_report_without_network_or_token(self):
         report = demo.build_demo_report()
@@ -289,7 +320,8 @@ class ServerTest(unittest.TestCase):
             s.write("secret")
         server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
-            make_handler(root, build, accounts, holdings, income or _demo_income),
+            make_handler(root, build, accounts, holdings, income or _demo_income,
+                         _demo_unrealized),
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -407,7 +439,8 @@ class ServerTest(unittest.TestCase):
         with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
             stream.write("<!doctype html><div id=root></div>")
         handler = make_handler(root, build, _ignore_demo(lambda: SAMPLE_ACCOUNTS),
-                               _ignore_demo(lambda: SAMPLE_HOLDINGS), _demo_income)
+                               _ignore_demo(lambda: SAMPLE_HOLDINGS), _demo_income,
+                               _demo_unrealized)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -437,7 +470,7 @@ class ServerTest(unittest.TestCase):
         with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
             stream.write("<!doctype html><div id=root></div>")
         handler = make_handler(root, _ignore_demo(sample_report), accounts, holdings,
-                               _demo_income)
+                               _demo_income, _demo_unrealized)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -485,6 +518,12 @@ class ServerTest(unittest.TestCase):
             self.get(f"{base}/api/income")
         self.assertEqual(caught.exception.code, 502)
         self.assertIn("get_equity_orders", json.loads(caught.exception.read())["error"])
+
+    def test_serves_unrealized_gains(self):
+        base = self.serve(sample_report)
+        status, body, _ = self.get(f"{base}/api/unrealized?demo=1")
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(body)["demo"])
 
     def test_unknown_api_endpoint_is_json_not_the_shell(self):
         base = self.serve(sample_report)

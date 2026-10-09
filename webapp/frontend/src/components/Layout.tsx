@@ -23,7 +23,7 @@ const NAV = [
   { label: "Accounts", to: "/accounts" },
   { label: "Holdings", to: "/holdings" },
   { label: "Rebalance", to: "/rebalance" },
-  { label: "Income", to: "/income" },
+  { label: "Performance", to: "/performance" },
 ] as const;
 
 export default function Layout(): ReactElement {
@@ -32,7 +32,12 @@ export default function Layout(): ReactElement {
   const queryClient = useQueryClient();
   const fetching = useIsFetching() > 0;
   // Unknown paths must not select a tab, or MUI warns about an invalid value.
-  const active = NAV.some((item) => item.to === pathname) ? pathname : false;
+  // A section's sub-pages (/performance/unrealized) keep its tab selected.
+  const active =
+    NAV.find((item) =>
+      item.to === "/" ? pathname === "/" : pathname === item.to ||
+        pathname.startsWith(`${item.to}/`),
+    )?.to ?? false;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>

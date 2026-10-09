@@ -16,6 +16,8 @@ from typing import Iterable, Mapping
 from examples.income.core import IncomeConfig, IncomeReport
 from examples.income.report import build_income_report
 from examples.rebalance.report import Report, build_report
+from examples.unrealized.core import UnrealizedReport
+from examples.unrealized.report import build_unrealized_report
 from hood_normie.accounts import account_label
 from hood_normie.client import (
     LabeledAccount, NormalizedAccount, NormalizedPosition, PortfolioSnapshot,
@@ -293,3 +295,44 @@ class DemoIncomeSource:
 def build_demo_income(year: int) -> IncomeReport:
     """The income report from invented records, through the live computation."""
     return build_income_report(DemoIncomeSource(year), year, INCOME_CONFIG)
+
+
+# What each demo holding cost per share, for the unrealized view. MEME's lots
+# are left without a basis, so the demo shows the average-cost fallback.
+COST_PER_SHARE: Mapping[str, str] = {
+    "VTI": "212.40", "VXUS": "61.75", "BND": "76.10", "GLD": "181.20",
+    "OLDCO": "31.00", "MEME": "9.00",
+}
+PENDING_BASIS: frozenset[str] = frozenset({"MEME"})
+
+
+class DemoUnrealizedSource:
+    """Stands in for RobinhoodClient, answering from HOLDINGS and PRICES."""
+
+    def connect(self) -> None:
+        pass
+
+    def get_accounts(self) -> JsonValue:
+        return demo_accounts()
+
+    def equity_positions(self, account_number: str) -> list[JsonObject]:
+        return [{"symbol": symbol, "quantity": quantity,
+                 "average_buy_price": COST_PER_SHARE[symbol]}
+                for symbol, quantity in HOLDINGS.get(account_number, [])]
+
+    def get_equity_quotes(self, symbols: Iterable[str]) -> JsonValue:
+        return {"data": {"results": [
+            {"symbol": symbol, "last_trade_price": PRICES[symbol]}
+            for symbol in sorted(symbols) if symbol in PRICES
+        ]}}
+
+    def equity_tax_lots(self, account_number: str, symbol: str) -> list[JsonObject]:
+        quantity = dict(HOLDINGS.get(account_number, []))[symbol]
+        basis = (None if symbol in PENDING_BASIS
+                 else str(Decimal(quantity) * Decimal(COST_PER_SHARE[symbol])))
+        return [{"quantity": quantity, "tax_cost_basis": basis}]
+
+
+def build_demo_unrealized() -> UnrealizedReport:
+    """Unrealized gains from invented holdings, through the live computation."""
+    return build_unrealized_report(DemoUnrealizedSource())

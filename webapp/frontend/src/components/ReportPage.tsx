@@ -15,6 +15,7 @@ import type { ReactElement, ReactNode } from "react";
 export default function ReportPage({
   title,
   subtitle,
+  header,
   notice,
   error,
   isFetching,
@@ -24,6 +25,8 @@ export default function ReportPage({
 }: {
   title: string;
   subtitle: string;
+  /** Rendered under the title, above everything else: e.g. a page's sub-tabs. */
+  header?: ReactNode;
   notice?: ReactNode;
   error: unknown;
   isFetching: boolean;
@@ -39,6 +42,8 @@ export default function ReportPage({
           {subtitle}
         </Typography>
       </Box>
+
+      {header}
 
       {notice && (
         <Alert severity="info" sx={{ mb: 3 }}>

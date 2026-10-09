@@ -15,7 +15,9 @@ bazel run //examples/income -- --account ACCOUNT_NUMBER
 bazel run //examples/income -- --cumulative
 ```
 
-The web app's **Income** tab shows the same report, from the same code.
+The web app's **Performance** tab shows the same report, from the same code,
+under **Realized & income**; its **Unrealized** view is
+[`examples/unrealized`](../unrealized/README.md).
 
 ```text
 ◆ INCOME 2026 — individual · Main · 111

@@ -19,6 +19,7 @@ py_test(
     data = [
         "//examples:typecheck_sources",
         "//examples/income:typecheck_sources",
+        "//examples/unrealized:typecheck_sources",
         "//examples/rebalance:typecheck_sources",
         "//hood_normie:typecheck_sources",
         "//hooks:typecheck_sources",

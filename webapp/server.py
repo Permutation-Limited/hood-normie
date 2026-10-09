@@ -1,8 +1,8 @@
 """Local web server for the hood-normie single-page app.
 
 Serves the Vite bundle as static files and exposes the rebalance report, the
-account list, per-account holdings, and a year's realized income as JSON — the
-same views the `//examples` command-line tools print.
+account list, per-account holdings, a year's realized income, and unrealized
+gains as JSON — the same views the `//examples` command-line tools print.
 Read-only, like everything else in this repo: it computes and reports, and has no
 endpoint that could place an order.
 
@@ -26,6 +26,8 @@ from examples.income.core import DEFAULT_CONFIG as DEFAULT_INCOME_CONFIG
 from examples.income.core import IncomeReport, load_optional_config
 from examples.income.report import build_income_report, today_eastern
 from examples.paths import workspace_path
+from examples.unrealized.core import UnrealizedReport
+from examples.unrealized.report import build_unrealized_report
 from examples.rebalance.report import DEFAULT_ENDPOINT, Report, build_report
 from hood_normie import RobinhoodClient
 from hood_normie.accounts import account_records
@@ -34,7 +36,9 @@ from hood_normie.client import LabeledAccount
 from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 from hood_normie.types import JsonValue
 from webapp import demo as demo_data
-from webapp.api import accounts_json, holdings_json, income_json, report_json
+from webapp.api import (
+    accounts_json, holdings_json, income_json, report_json, unrealized_json,
+)
 
 
 DEFAULT_PORT = 8765
@@ -47,6 +51,7 @@ AccountsBuilder = Callable[[bool], JsonValue]
 HoldingsBuilder = Callable[[bool], list[LabeledAccount]]
 # Takes the calendar year, or None for the current one.
 IncomeBuilder = Callable[[bool, int | None], IncomeReport]
+UnrealizedBuilder = Callable[[bool], UnrealizedReport]
 DEMO_VALUES = frozenset({"1", "true", "yes"})
 
 
@@ -81,6 +86,7 @@ class Handler(BaseHTTPRequestHandler):
     build_accounts: AccountsBuilder
     build_holdings: HoldingsBuilder
     build_income: IncomeBuilder
+    build_unrealized: UnrealizedBuilder
     # One live fetch at a time: concurrent refreshes would multiply Robinhood
     # requests for no benefit, since every caller wants the same snapshot.
     lock = threading.Lock()
@@ -102,6 +108,10 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/income":
             self.serve_fetch(lambda: income_json(
                 self.build_income(demo, _year(parsed.query)), demo=demo
+            ))
+        elif parsed.path == "/api/unrealized":
+            self.serve_fetch(lambda: unrealized_json(
+                self.build_unrealized(demo), demo=demo
             ))
         elif parsed.path.startswith("/api/"):
             self.send_json({"error": f"unknown endpoint {parsed.path}"}, status=404)
@@ -188,13 +198,15 @@ class Handler(BaseHTTPRequestHandler):
 def make_handler(static_root: str, build: ReportBuilder,
                  build_accounts: AccountsBuilder,
                  build_holdings: HoldingsBuilder,
-                 build_income: IncomeBuilder) -> type[Handler]:
+                 build_income: IncomeBuilder,
+                 build_unrealized: UnrealizedBuilder) -> type[Handler]:
     return type("BoundHandler", (Handler,), {
         "static_root": static_root,
         "build": staticmethod(build),
         "build_accounts": staticmethod(build_accounts),
         "build_holdings": staticmethod(build_holdings),
         "build_income": staticmethod(build_income),
+        "build_unrealized": staticmethod(build_unrealized),
     })
 
 
@@ -277,9 +289,15 @@ def main() -> int:
                                  workspace_path(DEFAULT_INCOME_CONFIG)),
         )
 
+    def build_unrealized(demo: bool) -> UnrealizedReport:
+        if demo:
+            return demo_data.build_demo_unrealized()
+        return build_unrealized_report(client())
+
     server = ThreadingHTTPServer(
         ("127.0.0.1", args.port),
-        make_handler(static_root, build, build_accounts, build_holdings, build_income),
+        make_handler(static_root, build, build_accounts, build_holdings,
+                     build_income, build_unrealized),
     )
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"hood-normie serving {static_root}")

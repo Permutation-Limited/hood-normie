@@ -2,12 +2,14 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
 } from "@tanstack/react-router";
 import Layout from "./components/Layout";
 import Accounts from "./routes/Accounts";
 import Holdings from "./routes/Holdings";
 import Home from "./routes/Home";
-import Income from "./routes/Income";
+import Realized from "./routes/Realized";
+import Unrealized from "./routes/Unrealized";
 import Rebalance from "./routes/Rebalance";
 
 /** Demo mode lives in the URL so a demo view is linkable and survives reload. */
@@ -48,10 +50,26 @@ const holdingsRoute = createRoute({
   component: Holdings,
 });
 
+const performanceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/performance",
+  component: Realized,
+});
+
+const unrealizedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/performance/unrealized",
+  component: Unrealized,
+});
+
+// The tab was called Income before it gained unrealized gains; old links and
+// bookmarks still land on it, demo flag and all.
 const incomeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/income",
-  component: Income,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: "/performance", search });
+  },
 });
 
 const routeTree = rootRoute.addChildren([
@@ -59,6 +77,8 @@ const routeTree = rootRoute.addChildren([
   accountsRoute,
   holdingsRoute,
   rebalanceRoute,
+  performanceRoute,
+  unrealizedRoute,
   incomeRoute,
 ]);
 

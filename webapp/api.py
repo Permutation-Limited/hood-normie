@@ -20,6 +20,9 @@ from examples.income.treatment import (
     Treatment, TreatmentRange, period_treatments, treatment_range,
 )
 from examples.rebalance.core import Position, Recommendation
+from examples.unrealized.core import Holding as UnrealizedHolding
+from examples.unrealized.core import Totals as UnrealizedTotals
+from examples.unrealized.core import UnrealizedReport
 from examples.rebalance.report import AccountHoldings, PortfolioReport, Report
 from hood_normie.accounts import AccountSummary, account_summary
 from hood_normie.client import LabeledAccount
@@ -484,3 +487,89 @@ def _income_totals_json(totals: IncomeTotals) -> IncomeTotalsJson:
         "dividends": str(totals.dividends),
         "estimated_cash": str(totals.estimated_cash),
     }
+
+
+class UnrealizedTotalsJson(TypedDict):
+    market_value: str
+    cost_basis: str
+    unrealized: str
+    return_rate: str | None
+    # Holdings without a price or basis, left out of these sums.
+    incomplete: int
+
+
+class UnrealizedHoldingJson(TypedDict):
+    symbol: str
+    quantity: str
+    price: str | None
+    market_value: str | None
+    cost_basis: str | None
+    unrealized: str | None
+    return_rate: str | None
+    basis_source: str
+
+
+class UnrealizedAccountJson(TypedDict):
+    label: str
+    account_number: str
+    tax_advantaged: bool
+    totals: UnrealizedTotalsJson
+    holdings: list[UnrealizedHoldingJson]
+
+
+class UnrealizedJson(TypedDict):
+    generated_at: str
+    demo: bool
+    taxable_totals: UnrealizedTotalsJson
+    combined: list[UnrealizedHoldingJson]
+    accounts: list[UnrealizedAccountJson]
+
+
+def unrealized_json(report: UnrealizedReport, *, demo: bool = False,
+                    generated_at: datetime | None = None) -> UnrealizedJson:
+    """Serialize unrealized gains, matching the //examples/unrealized tables."""
+    moment = generated_at or datetime.now(timezone.utc)
+    return {
+        "generated_at": moment.isoformat(),
+        "demo": demo,
+        "taxable_totals": _unrealized_totals_json(report.taxable_totals),
+        "combined": [_unrealized_holding_json(item) for item in report.combined],
+        "accounts": [
+            {
+                "label": account.label,
+                "account_number": account.account_number,
+                "tax_advantaged": account.tax_advantaged,
+                "totals": _unrealized_totals_json(account.totals),
+                "holdings": [_unrealized_holding_json(item)
+                             for item in account.holdings],
+            }
+            for account in report.accounts
+        ],
+    }
+
+
+def _unrealized_totals_json(value: UnrealizedTotals) -> UnrealizedTotalsJson:
+    return {
+        "market_value": str(value.market_value),
+        "cost_basis": str(value.cost_basis),
+        "unrealized": str(value.unrealized),
+        "return_rate": _optional(value.return_rate),
+        "incomplete": value.incomplete,
+    }
+
+
+def _unrealized_holding_json(item: UnrealizedHolding) -> UnrealizedHoldingJson:
+    return {
+        "symbol": item.symbol,
+        "quantity": format(item.quantity.normalize(), "f"),
+        "price": _optional(item.price),
+        "market_value": _optional(item.market_value),
+        "cost_basis": _optional(item.cost_basis),
+        "unrealized": _optional(item.unrealized),
+        "return_rate": _optional(item.return_rate),
+        "basis_source": item.basis_source,
+    }
+
+
+def _optional(value: Decimal | None) -> str | None:
+    return None if value is None else str(value)

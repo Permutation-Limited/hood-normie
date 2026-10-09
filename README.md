@@ -15,6 +15,7 @@ read-only portfolio methods and **nothing here places a trade**.
 | `hood_normie/` | The library: transport, OAuth, and a normalized client |
 | `examples/rebalance/` | Asset-allocation rebalancing guidance |
 | `examples/income/` | Realized gains and dividends, split for estimated taxes |
+| `examples/unrealized/` | Unrealized gains per holding, account, and taxable total |
 | `webapp/` | A local browser view over accounts, holdings, and the plan |
 | `examples/` | Command-line tools for authenticating and listing |
 | `hooks/` | Pre-commit hooks that keep secrets out of the repo |
@@ -110,10 +111,22 @@ method. Retirement accounts are listed but kept out of the taxable totals. How e
 bucket is filled is documented in
 [`examples/income/README.md`](examples/income/README.md).
 
+## Example: unrealized gains
+
+Every holding marked at the latest quote against its tax-lot cost basis, per
+account and merged across taxable accounts:
+
+```sh
+bazel run //examples/unrealized
+```
+
+Details are in [`examples/unrealized/README.md`](examples/unrealized/README.md).
+
 ## Example: local web app
 
 The same data in a browser — one tab each for accounts, holdings, the rebalance
-plan, and realized income, with sortable and searchable tables and CSV export:
+plan, and performance (realized income and unrealized gains), with sortable and
+searchable tables and CSV export:
 
 ```sh
 bazel run //webapp:server
