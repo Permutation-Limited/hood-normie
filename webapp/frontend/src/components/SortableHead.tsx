@@ -10,13 +10,17 @@ import type { ReactElement } from "react";
 export default function SortableHead<T>({
   columns,
   view,
+  leading = false,
 }: {
   columns: readonly Column<T>[];
   view: TableView<T>;
+  /** An empty first cell, above a column of row controls. */
+  leading?: boolean;
 }): ReactElement {
   return (
     <TableHead>
       <TableRow>
+        {leading && <TableCell padding="none" />}
         {columns.map((column) => (
           <TableCell
             key={column.id}

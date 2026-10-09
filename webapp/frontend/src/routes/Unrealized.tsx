@@ -51,6 +51,22 @@ function Figures({ totals }: { totals: UnrealizedTotals }): ReactElement {
             ` (${percent.format(Number(totals.return_rate))})`}
         </Typography>
       </Box>
+      <Box>
+        <Typography variant="body2" color="text.secondary">
+          Short-term
+        </Typography>
+        <Typography variant="h6" sx={{ fontVariantNumeric: "tabular-nums" }}>
+          {money(totals.short_term)}
+        </Typography>
+      </Box>
+      <Box>
+        <Typography variant="body2" color="text.secondary">
+          Long-term
+        </Typography>
+        <Typography variant="h6" sx={{ fontVariantNumeric: "tabular-nums" }}>
+          {money(totals.long_term)}
+        </Typography>
+      </Box>
     </Stack>
   );
 }
@@ -58,9 +74,11 @@ function Figures({ totals }: { totals: UnrealizedTotals }): ReactElement {
 function AccountSection({
   account,
   demo,
+  accountLabels,
 }: {
   account: UnrealizedAccount;
   demo: boolean;
+  accountLabels: ReadonlyMap<string, string>;
 }): ReactElement {
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
@@ -86,6 +104,7 @@ function AccountSection({
           totals={account.totals}
           name={account.label}
           demo={demo}
+          accountLabels={accountLabels}
         />
       </CardContent>
     </Card>
@@ -99,6 +118,9 @@ export default function Unrealized(): ReactElement {
     fetchUnrealized,
   );
   const taxable = data?.accounts.filter((account) => !account.tax_advantaged) ?? [];
+  const accountLabels = new Map(
+    (data?.accounts ?? []).map((account) => [account.account_number, account.label]),
+  );
 
   return (
     <ReportPage
@@ -115,8 +137,9 @@ export default function Unrealized(): ReactElement {
         <>
           Each holding is marked at the latest quote against the cost basis of
           its open tax lots — the basis Robinhood reports on a 1099-B, wash-sale
-          adjustments included. Holding periods are not considered. Retirement
-          accounts are listed but left out of the taxable total.
+          adjustments included. Gains are split short- and long-term by
+          Robinhood&apos;s own lot terms; expand a holding to see its lots.
+          Retirement accounts are listed but left out of the taxable total.
         </>
       }
       error={error}
@@ -141,13 +164,19 @@ export default function Unrealized(): ReactElement {
                 totals={data.taxable_totals}
                 name="taxable"
                 demo={data.demo}
+                accountLabels={accountLabels}
               />
             )}
           </CardContent>
         </Card>
       )}
       {data?.accounts.map((account) => (
-        <AccountSection key={account.account_number} account={account} demo={data.demo} />
+        <AccountSection
+          key={account.account_number}
+          account={account}
+          demo={data.demo}
+          accountLabels={accountLabels}
+        />
       ))}
     </ReportPage>
   );

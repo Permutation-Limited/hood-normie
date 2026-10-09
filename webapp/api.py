@@ -23,6 +23,7 @@ from examples.rebalance.core import Position, Recommendation
 from examples.unrealized.core import Holding as UnrealizedHolding
 from examples.unrealized.core import Totals as UnrealizedTotals
 from examples.unrealized.core import UnrealizedReport
+from examples.unrealized.report import HoldingLots
 from examples.rebalance.report import AccountHoldings, PortfolioReport, Report
 from hood_normie.accounts import AccountSummary, account_summary
 from hood_normie.client import LabeledAccount
@@ -496,6 +497,9 @@ class UnrealizedTotalsJson(TypedDict):
     return_rate: str | None
     # Holdings without a price or basis, left out of these sums.
     incomplete: int
+    short_term: str
+    long_term: str
+    unknown_term: str
 
 
 class UnrealizedHoldingJson(TypedDict):
@@ -507,6 +511,33 @@ class UnrealizedHoldingJson(TypedDict):
     unrealized: str | None
     return_rate: str | None
     basis_source: str
+    short_term: str
+    long_term: str
+    unknown_term: str
+    # The earliest date a short-term lot goes long-term, if any.
+    next_long_term: str | None
+    lot_count: int
+    # Where the lots live: pass these to /api/lots to list them.
+    account_numbers: list[str]
+
+
+class LotJson(TypedDict):
+    account_number: str
+    acquired: str | None
+    quantity: str
+    cost_basis: str | None
+    market_value: str | None
+    unrealized: str | None
+    term: str
+    long_term_on: str | None
+
+
+class HoldingLotsJson(TypedDict):
+    generated_at: str
+    demo: bool
+    symbol: str
+    price: str | None
+    lots: list[LotJson]
 
 
 class UnrealizedAccountJson(TypedDict):
@@ -555,10 +586,14 @@ def _unrealized_totals_json(value: UnrealizedTotals) -> UnrealizedTotalsJson:
         "unrealized": str(value.unrealized),
         "return_rate": _optional(value.return_rate),
         "incomplete": value.incomplete,
+        "short_term": str(value.short_term),
+        "long_term": str(value.long_term),
+        "unknown_term": str(value.unknown_term),
     }
 
 
 def _unrealized_holding_json(item: UnrealizedHolding) -> UnrealizedHoldingJson:
+    split = item.by_term
     return {
         "symbol": item.symbol,
         "quantity": format(item.quantity.normalize(), "f"),
@@ -568,6 +603,39 @@ def _unrealized_holding_json(item: UnrealizedHolding) -> UnrealizedHoldingJson:
         "unrealized": _optional(item.unrealized),
         "return_rate": _optional(item.return_rate),
         "basis_source": item.basis_source,
+        "short_term": str(split["short"]),
+        "long_term": str(split["long"]),
+        "unknown_term": str(split["unknown"]),
+        "next_long_term": (item.next_long_term.isoformat()
+                           if item.next_long_term else None),
+        "lot_count": len(item.lots),
+        "account_numbers": list(item.account_numbers),
+    }
+
+
+def holding_lots_json(value: HoldingLots, *, demo: bool = False,
+                      generated_at: datetime | None = None) -> HoldingLotsJson:
+    """One holding's lots, for the drill-down beneath its row."""
+    moment = generated_at or datetime.now(timezone.utc)
+    return {
+        "generated_at": moment.isoformat(),
+        "demo": demo,
+        "symbol": value.symbol,
+        "price": _optional(value.price),
+        "lots": [
+            {
+                "account_number": lot.account_number,
+                "acquired": lot.acquired.isoformat() if lot.acquired else None,
+                "quantity": format(lot.quantity.normalize(), "f"),
+                "cost_basis": _optional(lot.cost_basis),
+                "market_value": _optional(lot.market_value(value.price)),
+                "unrealized": _optional(lot.unrealized(value.price)),
+                "term": lot.term,
+                "long_term_on": (lot.long_term_on.isoformat()
+                                 if lot.long_term_on else None),
+            }
+            for lot in value.lots
+        ],
     }
 
 

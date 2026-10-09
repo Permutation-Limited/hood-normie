@@ -1,10 +1,13 @@
 from decimal import Decimal
 import unittest
 
+from datetime import date
+
 from examples.unrealized.core import (
-    AccountUnrealized, Holding, UnrealizedReport, combine, cost_basis, holding, totals,
+    AccountUnrealized, Holding, Lot, UnrealizedReport, combine, cost_basis, holding,
+    parse_lots, totals,
 )
-from examples.unrealized.report import build_unrealized_report
+from examples.unrealized.report import build_holding_lots, build_unrealized_report
 from hood_normie.types import JsonObject, JsonValue
 
 
@@ -44,6 +47,48 @@ class HoldingTest(unittest.TestCase):
         self.assertEqual((total.market_value, total.cost_basis, total.incomplete),
                          (D(100), D(50), 1))
         self.assertEqual(total.return_rate, D(1))
+
+
+class LotTest(unittest.TestCase):
+    def test_parses_robinhoods_terms_oldest_first(self):
+        lots = parse_lots([
+            {"open_date": "2026-03-05", "quantity": "7.979368",
+             "tax_cost_basis": "561.00", "term": "lt"},
+            {"open_date": "2021-10-18", "quantity": "210", "tax_cost_basis": "16000",
+             "term": "lt"},
+            {"open_date": "2026-09-04", "quantity": "7", "tax_cost_basis": None,
+             "term": "st"},
+        ], "111")
+        self.assertEqual([lot.acquired for lot in lots],
+                         [date(2021, 10, 18), date(2026, 3, 5), date(2026, 9, 4)])
+        # A wash-sale replacement keeps Robinhood's inherited long term.
+        self.assertEqual(lots[1].term, "long")
+        self.assertIsNone(lots[1].long_term_on)
+        self.assertEqual(lots[2].long_term_on, date(2027, 9, 5))
+        self.assertIsNone(lots[2].cost_basis)
+        self.assertEqual(lots[0].account_number, "111")
+
+    def test_leap_day_lot(self):
+        lot = Lot(date(2024, 2, 29), D(1), D(1), "short")
+        self.assertEqual(lot.long_term_on, date(2025, 3, 2))
+
+    def test_gain_splits_by_term_and_adds_up(self):
+        lots = (Lot(date(2020, 1, 2), D("1"), D("50"), "long"),
+                Lot(date(2026, 6, 1), D("2"), D("210"), "short"))
+        # At this price the holding rounds to $300.02 but its lots to $100.00
+        # and $200.01; the stray cent goes to the larger (long-term) part.
+        item = Holding("VT", D("3"), D("100.005"), D("260"), "tax lots", lots)
+        split = item.by_term
+        self.assertEqual(split["long"] + split["short"], item.unrealized)
+        self.assertEqual((split["long"], split["short"]), (D("50.01"), D("-9.99")))
+        self.assertEqual(item.next_long_term, date(2027, 6, 2))
+        total = totals([item])
+        self.assertEqual((total.short_term, total.long_term),
+                         (split["short"], split["long"]))
+
+    def test_average_cost_holdings_have_no_term(self):
+        item = Holding("VT", D(1), D(100), D(60), "average cost")
+        self.assertEqual(item.by_term["unknown"], D(40))
 
 
 class CombineTest(unittest.TestCase):
@@ -100,6 +145,15 @@ class BuildReportTest(unittest.TestCase):
         self.assertEqual(source.quoted, [["VT"]])
         self.assertEqual([item.tax_advantaged for item in report.accounts], [False, True])
         self.assertEqual(report.taxable_totals.unrealized, D(40))
+
+    def test_lots_on_demand_span_accounts_and_mark_at_a_fresh_quote(self):
+        source = FakeSource()
+        found = build_holding_lots(source, ["111", "222"], "vt")
+        self.assertEqual(found.symbol, "VT")
+        self.assertEqual(found.price, D(120))
+        self.assertEqual([lot.account_number for lot in found.lots], ["111", "222"])
+        with self.assertRaises(ValueError):
+            build_holding_lots(source, [], "VT")
 
 
 if __name__ == "__main__":

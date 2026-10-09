@@ -17,6 +17,7 @@ import json
 import mimetypes
 import os
 import posixpath
+import re
 import sys
 import threading
 from typing import Callable
@@ -27,7 +28,9 @@ from examples.income.core import IncomeReport, load_optional_config
 from examples.income.report import build_income_report, today_eastern
 from examples.paths import workspace_path
 from examples.unrealized.core import UnrealizedReport
-from examples.unrealized.report import build_unrealized_report
+from examples.unrealized.report import (
+    HoldingLots, build_holding_lots, build_unrealized_report,
+)
 from examples.rebalance.report import DEFAULT_ENDPOINT, Report, build_report
 from hood_normie import RobinhoodClient
 from hood_normie.accounts import account_records
@@ -37,7 +40,8 @@ from hood_normie.oauth import DEFAULT_TOKEN_FILE, OAuthError
 from hood_normie.types import JsonValue
 from webapp import demo as demo_data
 from webapp.api import (
-    accounts_json, holdings_json, income_json, report_json, unrealized_json,
+    accounts_json, holding_lots_json, holdings_json, income_json, report_json,
+    unrealized_json,
 )
 
 
@@ -52,6 +56,10 @@ HoldingsBuilder = Callable[[bool], list[LabeledAccount]]
 # Takes the calendar year, or None for the current one.
 IncomeBuilder = Callable[[bool, int | None], IncomeReport]
 UnrealizedBuilder = Callable[[bool], UnrealizedReport]
+# Takes the account numbers and the symbol whose lots to list.
+LotsBuilder = Callable[[bool, list[str], str], HoldingLots]
+SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,11}$")
+ACCOUNT = re.compile(r"^[A-Za-z0-9\-]{1,40}$")
 DEMO_VALUES = frozenset({"1", "true", "yes"})
 
 
@@ -59,6 +67,18 @@ def _is_demo(query: str) -> bool:
     """Demo mode is opt-in per request; anything unrecognized means live data."""
     values = parse_qs(query).get("demo", [])
     return bool(values) and values[-1].lower() in DEMO_VALUES
+
+
+def _lots_request(query: str) -> tuple[list[str], str]:
+    """The accounts and symbol a lots request names, checked before any fetch."""
+    params = parse_qs(query)
+    symbol = (params.get("symbol") or [""])[-1].upper()
+    accounts = params.get("account", [])
+    if not SYMBOL.match(symbol):
+        raise ValueError("lots need a symbol, e.g. ?symbol=VT&account=...")
+    if not accounts or not all(ACCOUNT.match(item) for item in accounts):
+        raise ValueError("lots need one or more account numbers")
+    return accounts, symbol
 
 
 def _year(query: str) -> int | None:
@@ -87,6 +107,7 @@ class Handler(BaseHTTPRequestHandler):
     build_holdings: HoldingsBuilder
     build_income: IncomeBuilder
     build_unrealized: UnrealizedBuilder
+    build_lots: LotsBuilder
     # One live fetch at a time: concurrent refreshes would multiply Robinhood
     # requests for no benefit, since every caller wants the same snapshot.
     lock = threading.Lock()
@@ -112,6 +133,10 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/api/unrealized":
             self.serve_fetch(lambda: unrealized_json(
                 self.build_unrealized(demo), demo=demo
+            ))
+        elif parsed.path == "/api/lots":
+            self.serve_fetch(lambda: holding_lots_json(
+                self.build_lots(demo, *_lots_request(parsed.query)), demo=demo
             ))
         elif parsed.path.startswith("/api/"):
             self.send_json({"error": f"unknown endpoint {parsed.path}"}, status=404)
@@ -199,7 +224,8 @@ def make_handler(static_root: str, build: ReportBuilder,
                  build_accounts: AccountsBuilder,
                  build_holdings: HoldingsBuilder,
                  build_income: IncomeBuilder,
-                 build_unrealized: UnrealizedBuilder) -> type[Handler]:
+                 build_unrealized: UnrealizedBuilder,
+                 build_lots: LotsBuilder) -> type[Handler]:
     return type("BoundHandler", (Handler,), {
         "static_root": static_root,
         "build": staticmethod(build),
@@ -207,6 +233,7 @@ def make_handler(static_root: str, build: ReportBuilder,
         "build_holdings": staticmethod(build_holdings),
         "build_income": staticmethod(build_income),
         "build_unrealized": staticmethod(build_unrealized),
+        "build_lots": staticmethod(build_lots),
     })
 
 
@@ -294,10 +321,15 @@ def main() -> int:
             return demo_data.build_demo_unrealized()
         return build_unrealized_report(client())
 
+    def build_lots(demo: bool, accounts: list[str], symbol: str) -> HoldingLots:
+        if demo:
+            return demo_data.build_demo_lots(accounts, symbol)
+        return build_holding_lots(client(), accounts, symbol)
+
     server = ThreadingHTTPServer(
         ("127.0.0.1", args.port),
         make_handler(static_root, build, build_accounts, build_holdings,
-                     build_income, build_unrealized),
+                     build_income, build_unrealized, build_lots),
     )
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"hood-normie serving {static_root}")

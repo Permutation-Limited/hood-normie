@@ -6,6 +6,7 @@ account, and merged across the taxable accounts:
 ```sh
 bazel run //examples/unrealized
 bazel run //examples/unrealized -- --account ACCOUNT_NUMBER
+bazel run //examples/unrealized -- --lots
 ```
 
 The web app shows the same report on the **Performance** tab, under
@@ -13,10 +14,19 @@ The web app shows the same report on the **Performance** tab, under
 
 ```text
 ◆ UNREALIZED — Individual · Demo Brokerage · DEMO-TAXABLE
-SYMBOL        QUANTITY       PRICE          VALUE     COST BASIS           GAIN   RETURN
-BND                150      $72.85     $10,927.50     $11,415.00       -$487.50    -4.3%
-VTI                300     $285.50     $85,650.00     $63,720.00     $21,930.00   +34.4%
-TOTAL                              $96,577.50     $75,135.00     $21,442.50   +28.5%
+SYMBOL        QUANTITY       PRICE          VALUE     COST BASIS           GAIN   RETURN    SHORT-TERM     LONG-TERM
+BND                150      $72.85     $10,927.50     $11,415.00       -$487.50    -4.3%      -$162.50      -$325.00
+VTI                300     $285.50     $85,650.00     $63,720.00     $21,930.00   +34.4%     $7,310.00    $14,620.00
+TOTAL                              $96,577.50     $75,135.00     $21,442.50   +28.5%     $7,147.50    $14,295.00
+```
+
+With `--lots`, each holding's open lots are listed beneath it, oldest first,
+with the date each short-term lot goes long-term:
+
+```text
+VTI                300     $285.50     $85,650.00     $63,720.00     $21,930.00   +34.4%     $7,310.00    $14,620.00
+  2023-05-14 LONG              200      $57,100.00     $42,480.00     $14,620.00
+  2026-06-10 SHORT             100      $28,550.00     $21,240.00      $7,310.00  long-term 2027-06-11
 ```
 
 Retirement accounts are listed but left out of the combined total: their gains
@@ -36,8 +46,22 @@ taxable account is read.
   `average_buy_price` stands in, and the row says so (`average cost` in the CLI,
   an asterisk on the web).
 
-Equities only: options and crypto positions are not included. Holding periods
-are not considered, so unrealized gains are not split short- and long-term.
+## Short- and long-term
+
+Each lot carries Robinhood's own `term`, and a holding's gain is split by its
+lots: each lot is marked at the holding's price, and any cent of rounding
+between the lots and the holding goes to the larger part, so the two columns
+always add up to the gain. A holding whose basis fell back to average cost has
+no lots to split by, so its gain is reported as unknown-term and the total says
+how much that is.
+
+`term` is used as given rather than recomputed from the purchase date, because
+it is the more accurate of the two: a wash sale's replacement shares inherit
+the holding period of the shares sold, and Robinhood reflects that in `term`
+while keeping the purchase date as `open_date`. The "goes long-term" date is
+counted from the purchase date, so such a lot may get there sooner.
+
+Equities only: options and crypto positions are not included.
 
 ## Layout
 

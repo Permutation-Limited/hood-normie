@@ -13,7 +13,7 @@ Each tab is one of the command-line tools:
 | Holdings | `/api/holdings` | `bazel run //examples:list_holdings` |
 | Rebalance | `/api/rebalance` | `bazel run //examples/rebalance` |
 | Performance › Realized & income | `/api/income` | `bazel run //examples/income` |
-| Performance › Unrealized | `/api/unrealized` | `bazel run //examples/unrealized` |
+| Performance › Unrealized | `/api/unrealized`, `/api/lots` | `bazel run //examples/unrealized` |
 
 It **does not place orders**. There is no endpoint that could.
 
@@ -278,6 +278,31 @@ totals leave out.
     {"label": "individual · 111", "account_number": "111",
      "tax_advantaged": false, "totals": {"...": "as taxable_totals"},
      "holdings": [{"...": "as combined"}]}
+  ]
+}
+```
+
+Each holding in `/api/unrealized` also carries `short_term`, `long_term`, and
+`unknown_term` gains, `next_long_term` (the earliest date a short-term lot goes
+long-term), `lot_count`, and `account_numbers`. The lots themselves are left
+out — a holding can have dozens — and come from a second endpoint the page
+calls only when a row is expanded:
+
+`GET /api/lots?symbol=VT&account=111[&account=222]` fetches one holding's open
+lots in the named accounts (several for a row of the combined table) and marks
+them at a fresh quote. The symbol and account numbers are checked before any
+request reaches Robinhood.
+
+```json
+{
+  "generated_at": "2026-10-08T23:57:37.000000+00:00",
+  "demo": false,
+  "symbol": "VT",
+  "price": "158.735",
+  "lots": [
+    {"account_number": "111", "acquired": "2026-06-10", "quantity": "10",
+     "cost_basis": "1500.00", "market_value": "1587.35", "unrealized": "87.35",
+     "term": "short", "long_term_on": "2027-06-11"}
   ]
 }
 ```

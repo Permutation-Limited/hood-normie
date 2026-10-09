@@ -231,7 +231,8 @@ interface FetchOptions {
 async function get<T>(
   path: string,
   options: FetchOptions,
-  params: Record<string, string> = {},
+  // URLSearchParams when a key repeats, as `account` does for lots.
+  params: Record<string, string> | URLSearchParams = {},
 ): Promise<T> {
   const search = new URLSearchParams(params);
   if (options.demo) {
@@ -287,6 +288,11 @@ export interface UnrealizedTotals {
   return_rate: string | null;
   /** Holdings left out of the sums for want of a price or basis. */
   incomplete: number;
+  /** The gain split by Robinhood's lot terms. */
+  short_term: string;
+  long_term: string;
+  /** Gain on holdings without lot bases (average cost), so no term. */
+  unknown_term: string;
 }
 
 export type BasisSource = "tax lots" | "average cost" | "unavailable";
@@ -301,6 +307,37 @@ export interface UnrealizedHolding {
   return_rate: string | null;
   /** "tax lots" unless a lot's basis is pending; then Robinhood's average cost. */
   basis_source: BasisSource;
+  short_term: string;
+  long_term: string;
+  unknown_term: string;
+  /** The earliest date a short-term lot goes long-term. */
+  next_long_term: string | null;
+  lot_count: number;
+  /** Where the lots live; pass these to `fetchLots` to list them. */
+  account_numbers: string[];
+}
+
+export type LotTerm = "short" | "long" | "unknown";
+
+export interface Lot {
+  account_number: string;
+  acquired: string | null;
+  quantity: string;
+  cost_basis: string | null;
+  market_value: string | null;
+  unrealized: string | null;
+  /** Robinhood's own term, which counts inherited wash-sale holding periods. */
+  term: LotTerm;
+  /** When a short-term lot goes long-term, counted from its purchase date. */
+  long_term_on: string | null;
+}
+
+export interface HoldingLots {
+  generated_at: string;
+  demo: boolean;
+  symbol: string;
+  price: string | null;
+  lots: Lot[];
 }
 
 export interface UnrealizedAccount {
@@ -325,4 +362,17 @@ export async function fetchUnrealized(
   options: FetchOptions = {},
 ): Promise<UnrealizedReport> {
   return get<UnrealizedReport>("/api/unrealized", options);
+}
+
+/** One holding's open lots, fetched only when its row is expanded. */
+export async function fetchLots(
+  symbol: string,
+  accounts: readonly string[],
+  options: FetchOptions = {},
+): Promise<HoldingLots> {
+  const params = new URLSearchParams({ symbol });
+  for (const account of accounts) {
+    params.append("account", account);
+  }
+  return get<HoldingLots>("/api/lots", options, params);
 }

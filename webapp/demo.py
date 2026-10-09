@@ -17,7 +17,9 @@ from examples.income.core import IncomeConfig, IncomeReport
 from examples.income.report import build_income_report
 from examples.rebalance.report import Report, build_report
 from examples.unrealized.core import UnrealizedReport
-from examples.unrealized.report import build_unrealized_report
+from examples.unrealized.report import (
+    HoldingLots, build_holding_lots, build_unrealized_report,
+)
 from hood_normie.accounts import account_label
 from hood_normie.client import (
     LabeledAccount, NormalizedAccount, NormalizedPosition, PortfolioSnapshot,
@@ -327,12 +329,37 @@ class DemoUnrealizedSource:
         ]}}
 
     def equity_tax_lots(self, account_number: str, symbol: str) -> list[JsonObject]:
-        quantity = dict(HOLDINGS.get(account_number, []))[symbol]
-        basis = (None if symbol in PENDING_BASIS
-                 else str(Decimal(quantity) * Decimal(COST_PER_SHARE[symbol])))
-        return [{"quantity": quantity, "tax_cost_basis": basis}]
+        """Two lots per holding: two thirds bought years ago, the rest recently.
+
+        The recent lot is a few months old, so the drill-down shows the date it
+        goes long-term. Both carry the same per-share cost, keeping the
+        holding's basis what COST_PER_SHARE says.
+        """
+        held = dict(HOLDINGS.get(account_number, []))
+        if symbol not in held:
+            return []
+        quantity = Decimal(held[symbol])
+        older = (quantity * 2 / 3).quantize(Decimal(1))
+        today = date.today()
+        lots = [(older, date(today.year - 3, 5, 14), "lt"),
+                (quantity - older, today - timedelta(days=120), "st")]
+        cost = Decimal(COST_PER_SHARE[symbol])
+        return [
+            {"open_date": opened.isoformat(), "quantity": str(shares),
+             "tax_cost_basis": None if symbol in PENDING_BASIS else str(shares * cost),
+             "term": term}
+            for shares, opened, term in lots if shares > 0
+        ]
 
 
 def build_demo_unrealized() -> UnrealizedReport:
     """Unrealized gains from invented holdings, through the live computation."""
     return build_unrealized_report(DemoUnrealizedSource())
+
+
+def build_demo_lots(account_numbers: list[str], symbol: str) -> HoldingLots:
+    """One demo holding's lots, as the drill-down beneath its row asks for."""
+    known = [number for number in account_numbers if number in HOLDINGS]
+    if not known:
+        raise ValueError("no demo account by that number")
+    return build_holding_lots(DemoUnrealizedSource(), known, symbol)

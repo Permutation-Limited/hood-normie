@@ -42,6 +42,13 @@ def _demo_unrealized(demo):
     return build_demo_unrealized()
 
 
+def _demo_lots(demo, accounts, symbol):
+    return build_demo_lots(accounts, symbol)
+
+
+build_demo_lots = demo.build_demo_lots
+
+
 build_demo_unrealized = demo.build_demo_unrealized
 
 
@@ -254,6 +261,21 @@ class UnrealizedJsonTest(unittest.TestCase):
         meme = next(item for item in taxable["holdings"] if item["symbol"] == "MEME")
         self.assertEqual(meme["basis_source"], "average cost")
 
+    def test_gains_split_by_lot_term(self):
+        payload = unrealized_json(demo.build_demo_unrealized())
+        vti = next(item for item in payload["accounts"][0]["holdings"]
+                   if item["symbol"] == "VTI")
+        self.assertEqual(Decimal(vti["short_term"]) + Decimal(vti["long_term"]),
+                         Decimal(vti["unrealized"] or 0))
+        self.assertEqual(vti["lot_count"], 2)
+        self.assertEqual(vti["account_numbers"], ["DEMO-TAXABLE"])
+        self.assertIsNotNone(vti["next_long_term"])
+        meme = next(item for item in payload["accounts"][0]["holdings"]
+                    if item["symbol"] == "MEME")
+        # No lot basis, so no split: the whole gain is unknown-term.
+        self.assertEqual(meme["unknown_term"], meme["unrealized"])
+        self.assertEqual(meme["lot_count"], 0)
+
     def test_combined_covers_only_taxable_accounts(self):
         payload = unrealized_json(demo.build_demo_unrealized())
         self.assertEqual(payload["taxable_totals"],
@@ -321,7 +343,7 @@ class ServerTest(unittest.TestCase):
         server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
             make_handler(root, build, accounts, holdings, income or _demo_income,
-                         _demo_unrealized),
+                         _demo_unrealized, _demo_lots),
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -440,7 +462,7 @@ class ServerTest(unittest.TestCase):
             stream.write("<!doctype html><div id=root></div>")
         handler = make_handler(root, build, _ignore_demo(lambda: SAMPLE_ACCOUNTS),
                                _ignore_demo(lambda: SAMPLE_HOLDINGS), _demo_income,
-                               _demo_unrealized)
+                               _demo_unrealized, _demo_lots)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -470,7 +492,7 @@ class ServerTest(unittest.TestCase):
         with open(os.path.join(root, INDEX), "w", encoding="utf-8") as stream:
             stream.write("<!doctype html><div id=root></div>")
         handler = make_handler(root, _ignore_demo(sample_report), accounts, holdings,
-                               _demo_income, _demo_unrealized)
+                               _demo_income, _demo_unrealized, _demo_lots)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -524,6 +546,27 @@ class ServerTest(unittest.TestCase):
         status, body, _ = self.get(f"{base}/api/unrealized?demo=1")
         self.assertEqual(status, 200)
         self.assertTrue(json.loads(body)["demo"])
+
+    def test_serves_one_holdings_lots_on_demand(self):
+        base = self.serve(sample_report)
+        _, body, _ = self.get(
+            f"{base}/api/lots?symbol=vti&account=DEMO-TAXABLE&account=DEMO-IRA&demo=1")
+        payload = json.loads(body)
+        self.assertEqual(payload["symbol"], "VTI")
+        self.assertEqual({lot["account_number"] for lot in payload["lots"]},
+                         {"DEMO-TAXABLE", "DEMO-IRA"})
+        self.assertEqual({lot["term"] for lot in payload["lots"]}, {"short", "long"})
+        short = next(lot for lot in payload["lots"] if lot["term"] == "short")
+        self.assertIsNotNone(short["long_term_on"])
+
+    def test_lots_requests_are_checked_before_fetching(self):
+        base = self.serve(sample_report)
+        for query in ("symbol=VT", "account=DEMO-IRA", "symbol=../x&account=1",
+                      "symbol=VT&account=a/b"):
+            with self.subTest(query=query):
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    self.get(f"{base}/api/lots?{query}&demo=1")
+                self.assertEqual(caught.exception.code, 400)
 
     def test_unknown_api_endpoint_is_json_not_the_shell(self):
         base = self.serve(sample_report)
