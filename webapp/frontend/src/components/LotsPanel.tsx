@@ -6,7 +6,6 @@ import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +13,11 @@ import { useSearch } from "@tanstack/react-router";
 import type { Lot, LotTerm } from "../api";
 import { fetchLots } from "../api";
 import { money, shares } from "../format";
+import type { Column } from "../sorting";
+import { useTableView } from "../useTableView";
 import CsvButton from "./CsvButton";
+import SortableHead from "./SortableHead";
+import { useMemo } from "react";
 import type { ReactElement } from "react";
 
 const TERM_LABELS: Record<LotTerm, string> = {
@@ -22,6 +25,55 @@ const TERM_LABELS: Record<LotTerm, string> = {
   long: "Long",
   unknown: "Unknown",
 };
+
+function numberOrNull(value: string | null): number | null {
+  return value === null ? null : Number(value);
+}
+
+/** Lot columns; the account column only when lots span several accounts. */
+function lotColumns(
+  accountLabels: ReadonlyMap<string, string>,
+  several: boolean,
+): readonly Column<Lot>[] {
+  const account: Column<Lot> = {
+    id: "account",
+    label: "Account",
+    value: (row) => accountLabels.get(row.account_number) ?? row.account_number,
+  };
+  return [
+    ...(several ? [account] : []),
+    // ISO dates sort correctly as text.
+    { id: "acquired", label: "Acquired", value: (row) => row.acquired },
+    { id: "term", label: "Term", value: (row) => TERM_LABELS[row.term] },
+    {
+      id: "quantity",
+      label: "Quantity",
+      numeric: true,
+      value: (row) => Number(row.quantity),
+    },
+    {
+      id: "value",
+      label: "Value",
+      numeric: true,
+      value: (row) => numberOrNull(row.market_value),
+    },
+    {
+      id: "basis",
+      label: "Cost basis",
+      numeric: true,
+      value: (row) => numberOrNull(row.cost_basis),
+    },
+    {
+      id: "gain",
+      label: "Gain",
+      numeric: true,
+      value: (row) => numberOrNull(row.unrealized),
+    },
+    { id: "long_term_on", label: "Long-term on", value: (row) => row.long_term_on },
+  ];
+}
+
+const NO_LOTS: readonly Lot[] = [];
 
 function amount(value: string | null): string {
   return value === null ? "—" : money(value);
@@ -59,6 +111,12 @@ export default function LotsPanel({
   });
   const numeric = { fontVariantNumeric: "tabular-nums" } as const;
   const several = accounts.length > 1;
+  const columns = useMemo(
+    () => lotColumns(accountLabels, several),
+    [accountLabels, several],
+  );
+  // Called before the early returns below: hooks must run on every render.
+  const view = useTableView(data?.lots ?? NO_LOTS, columns, "acquired");
 
   if (error != null) {
     return (
@@ -78,7 +136,7 @@ export default function LotsPanel({
     );
   }
 
-  const rows = data.lots;
+  const rows = view.rows;
   return (
     <Box sx={{ py: 1 }}>
       <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}>
@@ -106,18 +164,7 @@ export default function LotsPanel({
         />
       </Stack>
       <Table size="small">
-        <TableHead>
-          <TableRow>
-            {several && <TableCell>Account</TableCell>}
-            <TableCell>Acquired</TableCell>
-            <TableCell>Term</TableCell>
-            <TableCell align="right">Quantity</TableCell>
-            <TableCell align="right">Value</TableCell>
-            <TableCell align="right">Cost basis</TableCell>
-            <TableCell align="right">Gain</TableCell>
-            <TableCell>Long-term on</TableCell>
-          </TableRow>
-        </TableHead>
+        <SortableHead columns={columns} view={view} />
         <TableBody>
           {rows.map((lot, index) => (
             <TableRow key={`${lot.account_number}-${lot.acquired ?? ""}-${String(index)}`}>
