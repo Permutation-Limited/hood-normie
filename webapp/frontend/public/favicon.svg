@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- An allocation donut: three holdings at 50/30/20, drawn as dashes on one ring. -->
+  <rect width="64" height="64" rx="14" fill="#1976d2"/>
+  <g fill="none" stroke-width="10" transform="rotate(-90 32 32)">
+    <circle cx="32" cy="32" r="18" stroke="#fff" stroke-dasharray="50.55 113.1" stroke-dashoffset="-3"/>
+    <circle cx="32" cy="32" r="18" stroke="#fff" stroke-opacity="0.75" stroke-dasharray="27.93 113.1" stroke-dashoffset="-59.55"/>
+    <circle cx="32" cy="32" r="18" stroke="#fff" stroke-opacity="0.5" stroke-dasharray="16.62 113.1" stroke-dashoffset="-93.48"/>
+  </g>
+</svg>

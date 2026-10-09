@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webapp",
+      "runtimeExecutable": "bazel",
+      "runtimeArgs": ["run", "//webapp:server"],
+      "port": 8765
+    }
+  ]
+}

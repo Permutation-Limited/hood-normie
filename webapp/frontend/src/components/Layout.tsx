@@ -58,8 +58,18 @@ export default function Layout(): ReactElement {
               whiteSpace: "nowrap",
               flexShrink: 0,
               fontSize: { xs: "1rem", sm: "1.25rem" },
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
             }}
           >
+            {/* The favicon doubles as the logo; the name beside it labels it. */}
+            <Box
+              component="img"
+              src="/favicon.svg"
+              alt=""
+              sx={{ width: "1.5em", height: "1.5em", display: "block" }}
+            />
             hood-normie
           </Typography>
           <Tabs
