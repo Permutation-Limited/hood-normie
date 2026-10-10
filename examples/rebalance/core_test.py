@@ -364,12 +364,22 @@ class AccountSelectionTest(unittest.TestCase):
             {"nickname": "Individual", "account_number": "111"},
             {"accountType": "Agentic", "number": "222"},
         ]}
-        with self.assertRaises(SystemExit) as caught:
+        with patch("hood_normie.accounts.sys.stdin.isatty", return_value=False), \
+             self.assertRaises(SystemExit) as caught:
             select_account(payload)
         message = str(caught.exception)
         self.assertIn("Individual: 111", message)
         self.assertIn("Agentic: 222", message)
         self.assertIn("--account NUMBER", message)
+
+    def test_prompts_for_a_numbered_account_when_interactive(self):
+        payload = {"accounts": [
+            {"nickname": "Individual", "account_number": "111"},
+            {"accountType": "Agentic", "number": "222"},
+        ]}
+        with patch("hood_normie.accounts.sys.stdin.isatty", return_value=True), \
+             patch("builtins.input", return_value="2"):
+            self.assertEqual(select_account(payload), "222")
 
     def test_missing_number_lists_account_fields(self):
         payload = {"data": {"accounts": [{"name": "Brokerage", "account_id": "id-1"}]}}

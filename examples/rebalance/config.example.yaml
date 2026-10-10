@@ -11,7 +11,6 @@ assets:
 # Each portfolio is rebalanced independently against its own accounts and targets.
 portfolios:
   - name: taxable
-    robinhood_account_numbers: [ACCOUNT_ONE]
     target_cash: -2000
     minimum_trade: 5
     classes:
@@ -25,19 +24,3 @@ portfolios:
         ignore: false
       - name: legacy
         ignore: true
-    external_accounts:
-      - name: 401(k)
-        cash: 500
-        assets:
-          - symbol: VTI
-            quantity: 10
-  - name: retirement
-    robinhood_account_numbers: [ACCOUNT_TWO]
-    minimum_trade: 5
-    classes:
-      - name: stocks
-        weight: 0.60
-      - name: bonds
-        weight: 0.40
-      # legacy is undeclared here, so it targets $0 in this portfolio. Declare it
-      # with ignore: true instead to keep it out of the calculation entirely.

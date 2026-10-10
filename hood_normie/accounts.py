@@ -1,6 +1,7 @@
 """Parse and select accounts from Robinhood MCP responses."""
 
 import re
+import sys
 from typing import TypedDict
 
 from hood_normie.types import JsonObject, JsonValue, is_json_value
@@ -36,6 +37,8 @@ def select_account(payload: object) -> str:
     selectable = [(account, number) for account, number in numbered if number is not None]
     if len(selectable) == 1:
         return str(selectable[0][1])
+    if selectable and sys.stdin.isatty():
+        return prompt_for_account(selectable)
 
     lines = ["could not select a Robinhood account automatically."]
     if numbered:
@@ -55,6 +58,26 @@ def select_account(payload: object) -> str:
         for account in accounts:
             lines.append(f"  - {account_name(account)} fields: {', '.join(sorted(account))}")
     raise SystemExit("\n".join(lines))
+
+
+def prompt_for_account(selectable: list[tuple[JsonObject, str | int | float]]) -> str:
+    """Interactively choose one of Robinhood's numbered accounts."""
+    print("Select a Robinhood account:", file=sys.stderr)
+    for index, (account, number) in enumerate(selectable, start=1):
+        print(f"  {index}. {account_name(account)}: {number}", file=sys.stderr)
+    while True:
+        print(f"Select an account [1-{len(selectable)}] (Enter to cancel): ",
+              file=sys.stderr, end="", flush=True)
+        choice = input().strip()
+        if not choice:
+            raise SystemExit("no Robinhood account selected")
+        try:
+            selected = int(choice)
+        except ValueError:
+            selected = 0
+        if 1 <= selected <= len(selectable):
+            return str(selectable[selected - 1][1])
+        print(f"Enter a number from 1 to {len(selectable)}.", file=sys.stderr)
 
 
 def account_records(payload: object) -> list[JsonObject]:
