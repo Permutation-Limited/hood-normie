@@ -150,8 +150,11 @@ override that list for one run; because the override cannot say which portfolio
 it belongs to, it requires a run of exactly one portfolio (use `--portfolio`
 first if the config has several).
 
-Automatic account selection — letting Robinhood pick when no number is
-configured — works only for a single-portfolio config, for the same reason.
+When a single-portfolio config has no `robinhood_account_numbers`, the terminal
+program lists the numbered Robinhood accounts and asks you to choose one. In
+non-interactive runs, pass `--account NUMBER` instead. Multiple portfolios must
+configure their account numbers because the program cannot safely infer which
+allocation policy owns each account.
 
 `external_accounts` contains named accounts whose positions are not retrieved
 from Robinhood. Each entry requires a `name`; each asset requires `symbol` and
@@ -172,7 +175,9 @@ cp examples/rebalance/config.example.yaml config.yaml
 ```
 
 `config.yaml` is ignored by Git, while the example remains checked in as
-documentation. Edit it with your actual target allocation and account numbers:
+documentation. On the first interactive run, choose the Robinhood account the
+sample `taxable` portfolio should use. Edit the allocation and, if you add more
+portfolios, map each Robinhood account explicitly:
 
 ```yaml
 portfolios:
@@ -180,10 +185,8 @@ portfolios:
     robinhood_account_numbers: [ACCOUNT_ONE, ACCOUNT_TWO]
 ```
 
-Replace the placeholder account numbers under each portfolio; the snippet above
-is only that fragment, not a complete config file. Delete the second example
-portfolio if you only rebalance one. JSON config files are not accepted. Then
-run:
+The snippet above is only that fragment, not a complete config file. JSON config
+files are not accepted. Then run:
 
 ```sh
 bazel test //...
@@ -233,10 +236,11 @@ bazel run //examples/rebalance:rebalance
 ```
 
 For live requests, account selection uses repeated `--account` arguments first,
-then each portfolio's `robinhood_account_numbers`, and finally — only for a
-single-portfolio run with no configured numbers — automatic selection when
-Robinhood returns exactly one recognizable account. Every portfolio's accounts
-are fetched in one pass, so adding portfolios does not re-request shared quotes.
+then each portfolio's `robinhood_account_numbers`, and finally a terminal prompt
+for a single-portfolio run with no configured numbers. If Robinhood returns only
+one recognizable account, it is selected automatically. Every portfolio's
+accounts are fetched in one pass, so adding portfolios does not re-request
+shared quotes.
 
 The rebalancer reads the saved token and refreshes it automatically when needed.
 `ROBINHOOD_MCP_TOKEN` is still supported as a temporary override, but storing a
