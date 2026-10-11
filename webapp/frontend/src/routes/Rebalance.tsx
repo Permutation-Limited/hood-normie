@@ -14,6 +14,7 @@ import type { Portfolio } from "../api";
 import { fetchRebalance } from "../api";
 import { money } from "../format";
 import AccountTable from "../components/AccountTable";
+import AllocationCharts from "../components/AllocationCharts";
 import PlanTable from "../components/PlanTable";
 import ReportPage from "../components/ReportPage";
 import { useLiveQuery } from "../useLiveQuery";
@@ -59,6 +60,8 @@ function PortfolioSection({
             Map a symbol to a non-ignored class if it should affect targets.
           </Alert>
         )}
+
+        <AllocationCharts portfolio={portfolio} />
 
         <PlanTable
           recommendations={portfolio.recommendations}

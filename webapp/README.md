@@ -55,6 +55,18 @@ classes untinted — so the shape of a plan reads at a glance. The tint is faint
 and never the only signal: the chip in the first cell still spells the direction
 out.
 
+Above each plan, donut charts show the portfolio's allocation by asset class:
+what it holds now beside what the plan targets. The toggle above them narrows the
+current donut to one account; targets are set per portfolio, so the target donut
+shows only for the whole portfolio. Clicking a class, either its arc or its legend row,
+opens the symbols that make it up, summed across the accounts in scope, and
+the breadcrumb above leads back. A class keeps the same color on every donut of a
+portfolio, cash is drawn in a neutral gray, and past eight symbols the smallest fold
+into one "others" slice. A donut cannot draw a negative amount, so a margin balance
+or a negative cash target is listed beneath it instead, and the percentages are of
+the positive amounts. The charts are `@mui/x-charts`; the legend beside each one
+is ordinary MUI, carrying the exact amounts and serving as the keyboard route in.
+
 Every table also has a **CSV** button, which exports exactly what is on screen —
 current filter and column order included. The download holds the API's exact
 decimal strings rather than the formatted display text, so a spreadsheet
@@ -348,7 +360,8 @@ bazel test //webapp/...
 
 `//webapp/frontend:typecheck` runs `tsc --noEmit` in strict mode,
 `//webapp/frontend:smoke_test` asserts the bundle is servable,
-`//webapp/frontend:csv_test` and `//webapp/frontend:sorting_test` cover CSV
-serialization and table sorting, and
+`//webapp/frontend:csv_test`, `//webapp/frontend:sorting_test`, and
+`//webapp/frontend:allocation_test` cover CSV serialization, table sorting, and
+the allocation donuts' data, and
 `//webapp:server_test` covers the API and the static handler, including directory
 traversal attempts.

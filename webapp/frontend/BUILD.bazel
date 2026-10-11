@@ -24,6 +24,7 @@ DEPS = [
     ":node_modules/@emotion/styled",
     ":node_modules/@mui/icons-material",
     ":node_modules/@mui/material",
+    ":node_modules/@mui/x-charts",
     ":node_modules/@tanstack/react-query",
     ":node_modules/@tanstack/react-router",
     ":node_modules/@types/react",
@@ -75,5 +76,15 @@ js_test(
     name = "sorting_test",
     data = ["src/sorting.ts"],
     entry_point = "tools/check_sorting.mjs",
+    node_options = ["--experimental-strip-types"],
+)
+
+js_test(
+    name = "allocation_test",
+    data = [
+        "src/allocation.ts",
+        "src/api.ts",
+    ],
+    entry_point = "tools/check_allocation.mjs",
     node_options = ["--experimental-strip-types"],
 )
