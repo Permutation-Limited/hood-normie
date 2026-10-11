@@ -165,14 +165,23 @@ cash and total value. After a portfolio's account tables, a composite portfolio
 
 ## Configure and run
 
-Create a local config from the checked-in example:
+First, find the account numbers your token can read:
+
+```sh
+bazel run //examples:list_accounts
+```
+
+Then create a local config from the checked-in example:
 
 ```sh
 cp examples/rebalance/config.example.yaml config.yaml
 ```
 
 `config.yaml` is ignored by Git, while the example remains checked in as
-documentation. Edit it with your actual target allocation and account numbers:
+documentation. Its `ACCOUNT_ONE` and `ACCOUNT_TWO` values are placeholders, not
+real accounts — the rebalancer sends them to Robinhood as-is, and the run fails
+until you replace them. Edit the file with your actual target allocation and
+the account numbers `list_accounts` printed:
 
 ```yaml
 portfolios:
