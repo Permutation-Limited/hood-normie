@@ -5,6 +5,8 @@ ordinary API, plus examples built on it: an asset-allocation rebalancer, a
 realized-income report for estimated taxes, a local web app, and a handful of
 command-line tools.
 
+![Rebalance tab of the local web app, showing demo data](webapp/screenshots/rebalance.png)
+
 The library speaks MCP at the transport layer, but `RobinhoodClient` exposes
 read-only portfolio methods and **nothing here places a trade**.
 
@@ -130,14 +132,12 @@ Details are in [`examples/unrealized/README.md`](examples/unrealized/README.md).
 ## Example: local web app
 
 The same data in a browser — one tab each for accounts, holdings, the rebalance
-plan, and performance (realized income and unrealized gains), with sortable and
-searchable tables and CSV export:
+plan with allocation donuts, and performance (realized income and unrealized
+gains), with sortable and searchable tables and CSV export:
 
 ```sh
 bazel run //webapp:server
 ```
-
-![Rebalance tab](webapp/screenshots/rebalance.png)
 
 Then open <http://127.0.0.1:8765>. A Python server hosts a React + TypeScript +
 MUI single-page app and answers a small read-only JSON API. The listener binds
