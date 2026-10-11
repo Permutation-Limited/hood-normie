@@ -67,9 +67,14 @@ Declare what fraction of the portfolio each asset class should hold, and the
 rebalancer reports the dollar adjustment per class needed to get there:
 
 ```sh
+bazel run //examples:list_accounts
 cp examples/rebalance/config.example.yaml config.yaml
+# Replace ACCOUNT_ONE / ACCOUNT_TWO in config.yaml with numbers from list_accounts.
 bazel run //examples/rebalance
 ```
+
+The example config ships with placeholder account numbers; replace them with
+the real ones `list_accounts` prints before running the rebalancer.
 
 ```text
 ◆ REBALANCE PLAN
