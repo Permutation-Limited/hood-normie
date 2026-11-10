@@ -34,6 +34,16 @@ function treatment(period: TaxablePeriod, view: View): TreatmentRange {
   return view === "period" ? period.treatment : period.cumulative_treatment;
 }
 
+const TOTALS: readonly Column<TaxPeriod>[] = [
+  { label: "Realized gains", value: (p, v) => totals(p, v).realized },
+  { label: "Dividends", value: (p, v) => totals(p, v).dividends },
+  {
+    label: "Total",
+    value: (p, v) =>
+      (Number(totals(p, v).realized) + Number(totals(p, v).dividends)).toFixed(2),
+  },
+];
+
 const DETAIL: readonly Column<TaxPeriod>[] = [
   { label: "Short-term", value: (p, v) => totals(p, v).short_term },
   { label: "Long-term", value: (p, v) => totals(p, v).long_term },
@@ -75,26 +85,33 @@ function isTaxable(periods: readonly TaxPeriod[]): periods is TaxablePeriod[] {
  *
  * Rows stay in period order and are not sortable: the order is the point. The
  * year-to-date view is what Form 2210's annualized method (Schedule AI) asks
- * for — income through Mar 31, May 31, Aug 31, and Dec 31. The taxable total
- * can also be grouped by tax rate; each period's share there is the change in
- * the year-to-date figure, since losses only net over a running total.
+ * for — income through Mar 31, May 31, Aug 31, and Dec 31. By default it shows
+ * plain totals. With `breakdown` it shows the attempted tax treatment instead:
+ * the term and qualification buckets, and for the taxable total a grouping by
+ * tax rate, where each period's share is the change in the year-to-date
+ * figure, since losses only net over a running total.
  */
 export default function PeriodsTable({
   periods,
   account,
   demo,
+  breakdown = false,
 }: {
   periods: TaxPeriod[] | TaxablePeriod[];
+  /** Show inferred tax buckets rather than plain totals. */
+  breakdown?: boolean;
   /** Used to name the download. */
   account: string;
   demo: boolean;
 }): ReactElement {
   const [view, setView] = useState<View>("period");
   const [grouping, setGrouping] = useState<Grouping>("rate");
-  const taxable = isTaxable(periods);
+  const taxable = breakdown && isTaxable(periods);
   const byRate = taxable && grouping === "rate";
   // Widened for rendering; the rate columns only ever see taxable periods.
-  const columns = (byRate ? BY_RATE : DETAIL) as readonly Column<TaxPeriod>[];
+  const columns = (
+    !breakdown ? TOTALS : byRate ? BY_RATE : DETAIL
+  ) as readonly Column<TaxPeriod>[];
   const numeric = { fontVariantNumeric: "tabular-nums" } as const;
   return (
     <Box sx={{ mt: 2 }}>
@@ -106,7 +123,11 @@ export default function PeriodsTable({
         useFlexGap
         sx={{ mb: 1 }}
       >
-        <Typography variant="subtitle2">By estimated-tax period</Typography>
+        <Typography variant="subtitle2">
+          {breakdown
+            ? "Tax treatment by estimated-tax period"
+            : "By estimated-tax period"}
+        </Typography>
         <Box sx={{ flexGrow: 1 }} />
         {taxable && (
           <ToggleButtonGroup
@@ -139,7 +160,12 @@ export default function PeriodsTable({
           <ToggleButton value="cumulative">Year to date</ToggleButton>
         </ToggleButtonGroup>
         <CsvButton
-          name={["periods", byRate ? "by-rate" : "detail", view, account]}
+          name={[
+            "periods",
+            !breakdown ? "totals" : byRate ? "by-rate" : "detail",
+            view,
+            account,
+          ]}
           demo={demo}
           headers={["Period", "Start", "End", "Due", ...columns.map((c) => c.label)]}
           rows={periods.map((period: TaxPeriod) => [

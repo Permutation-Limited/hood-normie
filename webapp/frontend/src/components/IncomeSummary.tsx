@@ -70,33 +70,80 @@ function cashNote(totals: IncomeTotals): string | undefined {
     : `Includes ${money(totals.estimated_cash)} of cash dividends estimated from price history`;
 }
 
+/** Realized gains plus dividends, as the API's decimal strings. */
+function combined(totals: IncomeTotals): string {
+  return (Number(totals.realized) + Number(totals.dividends)).toFixed(2);
+}
+
+function Headline({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}): ReactElement {
+  return (
+    <Box>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography
+        variant="h4"
+        color={Number(value) < 0 ? "error.main" : undefined}
+        sx={{ fontVariantNumeric: "tabular-nums" }}
+      >
+        {money(value)}
+      </Typography>
+    </Box>
+  );
+}
+
 /**
- * The buckets a tax estimate asks for. A retirement account has only totals:
- * neither its holding periods nor its qualified share are taxed this year.
+ * What the year actually produced: the figures Robinhood reports or that
+ * follow directly from its orders, with no guess at how they will be taxed.
  */
 export default function IncomeSummary({
   totals,
-  taxAdvantaged = false,
 }: {
   totals: IncomeTotals;
-  taxAdvantaged?: boolean;
 }): ReactElement {
-  if (taxAdvantaged) {
-    return (
-      <FigureGroup
-        title="Not taxed this year"
-        figures={[
-          { label: "Realized gains", value: totals.realized },
-          { label: "Dividends", value: totals.dividends },
-        ]}
-        note={cashNote(totals)}
-      />
-    );
-  }
+  const note = cashNote(totals);
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        spacing={5}
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ rowGap: 1 }}
+      >
+        <Headline label="Realized gains" value={totals.realized} />
+        <Headline label="Dividends" value={totals.dividends} />
+        <Headline label="Total" value={combined(totals)} />
+      </Stack>
+      {note && (
+        <Typography variant="caption" color="text.secondary">
+          {note}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * The buckets a tax estimate asks for. These are inferences, not broker
+ * figures: terms assume FIFO lot relief, and qualified shares come from
+ * `income.yaml`.
+ */
+export function IncomeBreakdown({
+  totals,
+}: {
+  totals: IncomeTotals;
+}): ReactElement {
   return (
     <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
       <FigureGroup
-        title="Realized gains"
+        title="Realized gains by inferred term"
         figures={[
           { label: "Short-term", value: totals.short_term },
           { label: "Long-term", value: totals.long_term },
@@ -104,13 +151,12 @@ export default function IncomeSummary({
         ]}
       />
       <FigureGroup
-        title="Dividends"
+        title="Dividends by qualification"
         figures={[
           { label: "Qualified", value: totals.qualified },
           { label: "Non-qualified", value: totals.nonqualified },
           { label: "Unclassified", value: totals.unclassified, unresolved: true },
         ]}
-        note={cashNote(totals)}
       />
     </Stack>
   );

@@ -10,11 +10,12 @@ import { useState } from "react";
 import type { IncomeAccount } from "../api";
 import { fetchIncome } from "../api";
 import DividendsTable from "../components/DividendsTable";
-import IncomeSummary from "../components/IncomeSummary";
+import IncomeSummary, { IncomeBreakdown } from "../components/IncomeSummary";
 import PeriodsTable from "../components/PeriodsTable";
 import PerformanceTabs from "../components/PerformanceTabs";
 import ReportPage from "../components/ReportPage";
 import SalesTable from "../components/SalesTable";
+import TaxTreatmentDetails from "../components/TaxTreatmentDetails";
 import TreatmentSummary from "../components/TreatmentSummary";
 import WashSales from "../components/WashSales";
 import { useLiveQuery } from "../useLiveQuery";
@@ -50,17 +51,25 @@ function AccountSection({
             label={account.tax_advantaged ? "Tax-advantaged" : "Taxable"}
           />
         </Stack>
-        <IncomeSummary
-          totals={account.totals}
-          taxAdvantaged={account.tax_advantaged}
-        />
+        <IncomeSummary totals={account.totals} />
         {!account.tax_advantaged &&
           (account.sales.length > 0 || account.dividends.length > 0) && (
-          <PeriodsTable
-            periods={account.periods}
-            account={account.label}
-            demo={demo}
-          />
+          <>
+            <PeriodsTable
+              periods={account.periods}
+              account={account.label}
+              demo={demo}
+            />
+            <TaxTreatmentDetails>
+              <IncomeBreakdown totals={account.totals} />
+              <PeriodsTable
+                breakdown
+                periods={account.periods}
+                account={account.label}
+                demo={demo}
+              />
+            </TaxTreatmentDetails>
+          </>
         )}
         <Divider sx={{ my: 2 }} />
         <SalesTable
@@ -103,12 +112,11 @@ export default function Realized(): ReactElement {
       }
       notice={
         <>
-          Sorted into the buckets a tax estimate needs; no tax is computed.
-          Robinhood reports neither holding periods nor qualified status: a
-          term is inferred from open lots or the order history, and qualified
-          shares come from <code>income.yaml</code>. Reinvested dividends are
-          exact; cash dividends are estimated from price history and dated by
-          ex-date. Treat these as estimates, not a 1099.
+          Realized gains are Robinhood&apos;s own figures and reinvested
+          dividends are exact; cash dividends are estimated from price history
+          and dated by ex-date. Robinhood reports neither holding periods nor
+          qualified status, so how any of it is taxed is a guess, kept under
+          &ldquo;Show estimated tax treatment&rdquo;. No tax is computed.
         </>
       }
       error={error}
@@ -146,18 +154,27 @@ export default function Realized(): ReactElement {
               <Typography variant="h6" gutterBottom>
                 Taxable accounts
               </Typography>
-              <TreatmentSummary
-                treatment={current.taxable_treatment}
-                carryoverShort={current.carryover_short}
-                carryoverLong={current.carryover_long}
-              />
-              <Divider sx={{ my: 2 }} />
               <IncomeSummary totals={current.taxable_totals} />
               <PeriodsTable
                 periods={current.taxable_periods}
                 account="taxable"
                 demo={current.demo}
               />
+              <TaxTreatmentDetails>
+                <TreatmentSummary
+                  treatment={current.taxable_treatment}
+                  carryoverShort={current.carryover_short}
+                  carryoverLong={current.carryover_long}
+                />
+                <Divider sx={{ my: 2 }} />
+                <IncomeBreakdown totals={current.taxable_totals} />
+                <PeriodsTable
+                  breakdown
+                  periods={current.taxable_periods}
+                  account="taxable"
+                  demo={current.demo}
+                />
+              </TaxTreatmentDetails>
             </CardContent>
           </Card>
           <WashSales
