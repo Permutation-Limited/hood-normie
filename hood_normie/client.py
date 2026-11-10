@@ -1,5 +1,6 @@
 """High-level, normalized client for Robinhood's Trading MCP tools."""
 
+from decimal import Decimal, InvalidOperation
 from typing import Callable, Iterable, NotRequired, TypedDict
 
 from hood_normie.accounts import account_label, account_number, account_records, select_account
@@ -106,14 +107,18 @@ class RobinhoodClient:
         return self.mcp.call_tool("get_equity_historicals", arguments)
 
     def equity_positions(self, account_number: str) -> list[JsonObject]:
-        """Every open equity position in an account, across all pages."""
-        return collect_pages(
-            lambda cursor: self.mcp.call_tool(
-                "get_equity_positions",
-                {"account_number": account_number, **({"cursor": cursor} if cursor else {})},
-            ),
-            "positions",
-        )
+        """Every equity position holding shares in an account, across all pages."""
+        return [
+            record for record in collect_pages(
+                lambda cursor: self.mcp.call_tool(
+                    "get_equity_positions",
+                    {"account_number": account_number,
+                     **({"cursor": cursor} if cursor else {})},
+                ),
+                "positions",
+            )
+            if holds_shares(record)
+        ]
 
     def daily_closes(
         self, symbols: Iterable[str], start_time: str, adjustment_type: str
@@ -396,7 +401,24 @@ def find_records_with_fields(
 
 
 def position_records(payload: JsonValue) -> list[JsonObject]:
-    return find_records_with_fields(payload, ("symbol",), ("quantity", "shares"))
+    return [
+        record for record in
+        find_records_with_fields(payload, ("symbol",), ("quantity", "shares"))
+        if holds_shares(record)
+    ]
+
+
+def holds_shares(position: JsonObject) -> bool:
+    """False for a zero-share placeholder, which is not a holding.
+
+    Robinhood lists these for things like an IPO allocation that has not
+    settled; they have no quote and nothing to value.
+    """
+    quantity = money_value(first(position, "quantity", "shares"))
+    try:
+        return quantity is None or Decimal(str(quantity)) != 0
+    except InvalidOperation:
+        return True
 
 
 def position_symbols(payload: JsonValue) -> list[str]:

@@ -53,6 +53,28 @@ class ClientNormalizationTest(unittest.TestCase):
             {"symbol": "VTI", "quantity": "2", "price": "250"}
         ])
 
+    def test_skips_a_zero_share_placeholder_that_has_no_quote(self):
+        # A pending IPO allocation is listed with no shares and cannot be quoted.
+        result = normalize_account(
+            {"data": {"total_value": "1000", "cash": "100"}},
+            {"data": {"positions": [
+                {"symbol": "VTI", "quantity": "2"},
+                {"symbol": "NEWCO", "quantity": "0.000000", "type": "empty"},
+            ]}},
+            {"data": {"quotes": [{"symbol": "VTI", "last_trade_price": "250"}]}},
+        )
+        self.assertEqual(result["positions"], [
+            {"symbol": "VTI", "quantity": "2", "price": "250"}
+        ])
+
+    def test_held_shares_without_a_quote_are_still_an_error(self):
+        with self.assertRaisesRegex(ValueError, "without usable quotes for: NEWCO"):
+            normalize_account(
+                {"data": {"total_value": "1000", "cash": "100"}},
+                {"data": {"positions": [{"symbol": "NEWCO", "quantity": "3"}]}},
+                {"data": {"quotes": []}},
+            )
+
     def test_normalizes_quote_map(self):
         self.assertEqual(
             normalize_quotes([{"symbol": "BND", "price": {"amount": "72.50"}}]),
@@ -134,6 +156,18 @@ class FetchHoldingsTest(unittest.TestCase):
         mcp.accounts = {"accounts": [{"nickname": "Unnumbered"}]}
         with self.assertRaises(ValueError):
             fake_client(mcp).fetch_holdings()
+
+
+class EquityPositionsTest(unittest.TestCase):
+    def test_leaves_out_zero_share_placeholders(self):
+        client = fake_client(FakeMcp({}, {}, {"111": {"data": {"positions": [
+            {"symbol": "VTI", "quantity": "2"},
+            {"symbol": "NEWCO", "quantity": "0.000000", "type": "empty"},
+        ]}}}, {}))
+        self.assertEqual(
+            [position["symbol"] for position in client.equity_positions("111")],
+            ["VTI"],
+        )
 
 
 class CollectPagesTest(unittest.TestCase):
